@@ -1,27 +1,62 @@
 // ============================================================
-// N2M SLA - Relatorio de Tratativas v3.2
+// N2M SLA - Relatorio de Tratativas v3.3
 // Layout simplificado: filtros + tabela + modal
-// Regras: Data = primeiro log, SLA = 30min/etapa, eye = movimentacoes
+// Ajustes: nomenclatura setores, cálculo SLA por movimentação,
+// tempo total acumulado, formato Xh Ymin, linhas comerciais específicas
 // ============================================================
 
 const API_BASE = window.location.origin;
 
-const SLA_CONFIG = {
-  'RM Loja':   { limite: 0.5, nome: 'RM Loja',   icone: 'fa-store',       cor: '#06b6d4', ordem: 1 },
-  'RM CD':     { limite: 0.5, nome: 'RM CD',     icone: 'fa-warehouse',   cor: '#6366f1', ordem: 2 },
-  'Comercial': { limite: 0.5, nome: 'Comercial', icone: 'fa-handshake',   cor: '#a855f7', ordem: 3 },
-  'Fiscal':    { limite: 0.5, nome: 'Fiscal',    icone: 'fa-calculator',  cor: '#f59e0b', ordem: 4 },
-  'Cadastro':  { limite: 0.5, nome: 'Cadastro',  icone: 'fa-id-card',     cor: '#ef4444', ordem: 5 },
-  'Liberado':  { limite: 0,   nome: 'Liberado',  icone: 'fa-check-circle',cor: '#10b981', ordem: 6 }
+// ============================================================
+// MAPEAMENTO COMPLETO DE SETORES (stus_nota / stus_plca)
+// ============================================================
+const MAPEAMENTO_SETORES = {
+  '9999':  { etapa: 'RM Loja Início',              limite: 0.5, nome: 'RM Loja Início',   icone: 'fa-store',       cor: '#06b6d4', ordem: 1,  grupo: 'rm' },
+  '18':    { etapa: 'RM Central',                    limite: 0.5, nome: 'RM Central',       icone: 'fa-warehouse',   cor: '#6366f1', ordem: 2,  grupo: 'rm' },
+  '10073': { etapa: 'Comercial Linha Seca',          limite: 0.5, nome: 'Comercial Linha Seca', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10074': { etapa: 'Comercial Perecíveis',          limite: 0.5, nome: 'Comercial Perecíveis', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10075': { etapa: 'Comercial Bazar',               limite: 0.5, nome: 'Comercial Bazar',  icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10076': { etapa: 'Comercial Perfumaria',          limite: 0.5, nome: 'Comercial Perfumaria', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10077': { etapa: 'Comercial Limpeza',             limite: 0.5, nome: 'Comercial Limpeza', icone: 'fa-handshake',  cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10078': { etapa: 'Comercial Mercearia',           limite: 0.5, nome: 'Comercial Mercearia', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10080': { etapa: 'Comercial Perfumaria Uso Pessoal', limite: 0.5, nome: 'Comercial Perfumaria Uso Pessoal', icone: 'fa-handshake', cor: '#a855f7', ordem: 3, grupo: 'comercial' },
+  '10081': { etapa: 'Comercial Hort',                limite: 0.5, nome: 'Comercial Hort',   icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10082': { etapa: 'Cadastro',                      limite: 0.5, nome: 'Cadastro',         icone: 'fa-id-card',     cor: '#ef4444', ordem: 4,  grupo: 'cadastro' },
+  '10083': { etapa: 'Encerramento',                  limite: 0,   nome: 'Encerramento',     icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
+  '10084': { etapa: 'Tributário',                    limite: 0.5, nome: 'Tributário',       icone: 'fa-calculator',  cor: '#f59e0b', ordem: 4,  grupo: 'tributario' },
+  '10085': { etapa: 'Encerramento',                  limite: 0,   nome: 'Encerramento',     icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
+  '10086': { etapa: 'Erro RM Loja',                  limite: 0.5, nome: 'Erro RM Loja',     icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 1, grupo: 'erro' },
+  '10087': { etapa: 'Encerramento',                  limite: 0,   nome: 'Encerramento',     icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
+  '10090': { etapa: 'Comercial Bomboniere',          limite: 0.5, nome: 'Comercial Bomboniere', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10096': { etapa: 'Comercial Mercearia Doce',      limite: 0.5, nome: 'Comercial Mercearia Doce', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
+  '10098': { etapa: 'Erro RM Central',               limite: 0.5, nome: 'Erro RM Central',  icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' }
 };
 
-const ETAPAS_ORDEM = ['RM Loja', 'RM CD', 'Comercial', 'Fiscal', 'Cadastro', 'Liberado'];
+// Grupos para exibição resumida na tabela principal
+const GRUPOS_RESUMIDOS = {
+  'rm': 'RM',
+  'comercial': 'Comercial',
+  'cadastro': 'Cadastro',
+  'tributario': 'Tributário',
+  'encerramento': 'Encerrado',
+  'erro': 'Erro'
+};
+
+// Status pills CSS classes por grupo
+const STATUS_PILLS = {
+  'rm': 'rm',
+  'comercial': 'comercial',
+  'cadastro': 'cadastro',
+  'tributario': 'tributario',
+  'encerramento': 'liberado',
+  'erro': 'cadastro'
+};
 
 let dadosNotas = [];
 let dadosFiltrados = [];
 let paginaAtual = 1;
 let itensPorPagina = 25;
-let notaAtualDetalhes = null; // Guarda a nota atual para o sub-modal
+let notaAtualDetalhes = null;
 
 // ============================================================
 // INICIALIZACAO
@@ -221,20 +256,20 @@ function atualizarTabela() {
   const fim = inicio + itensPorPagina;
   const pagina = dadosFiltrados.slice(inicio, fim);
 
-  const statusPills = {
-    'RM Loja': 'transito', 'RM CD': 'rm', 'Comercial': 'comercial',
-    'Fiscal': 'tributario', 'Cadastro': 'cadastro', 'Liberado': 'liberado'
-  };
-
   let html = '';
   for (const d of pagina) {
+    const config = MAPEAMENTO_SETORES[d.etapaAtual] || { grupo: 'rm', nome: d.etapaAtual };
+    const grupo = config.grupo || 'rm';
+    const pillClass = STATUS_PILLS[grupo] || 'rm';
+
     const slaTexto = d.pctSLA > 100 ? 'Fora' : d.pctSLA > 80 ? 'Alerta' : 'OK';
+
     html += `<tr>
       <td class="td-nf">${d.num_nota}</td>
       <td>${d.nome_forn}</td>
       <td>${d.codi_loja}</td>
       <td>${formatarData(d.dataPrimeiroLog || d.dtha_lanc)}</td>
-      <td><span class="status-pill ${statusPills[d.etapaAtual] || 'rm'}"><i class="fas fa-circle"></i> ${SLA_CONFIG[d.etapaAtual]?.nome || d.etapaAtual}</span></td>
+      <td><span class="status-pill ${pillClass}"><i class="fas fa-circle"></i> ${config.nome || d.etapaAtual}</span></td>
       <td>${formatarMinutos(d.tempoTotalHoras)}</td>
       <td><span class="sla-dot ${d.statusSLA}"></span> ${slaTexto} (${d.pctSLA.toFixed(0)}%)</td>
       <td>${d.totalMovimentacoes}</td>
@@ -321,7 +356,7 @@ async function verDetalhes(codi_lanc) {
     }
 
     const nf = data.data;
-    notaAtualDetalhes = nf; // Guarda para o sub-modal
+    notaAtualDetalhes = nf;
 
     const body = document.getElementById('modalBody');
 
@@ -339,7 +374,7 @@ async function verDetalhes(codi_lanc) {
     html += `</div>`;
 
     html += `<div class="detail-grid" style="margin-top: 12px;">`;
-    html += `<div class="detail-item"><div class="detail-label">Etapa Atual</div><div class="detail-value" style="color: ${nf.statusSLA === 'danger' ? 'var(--danger)' : nf.statusSLA === 'warning' ? 'var(--warning)' : 'var(--success)'};">${SLA_CONFIG[nf.etapaAtual]?.nome || nf.etapaAtual}</div></div>`;
+    html += `<div class="detail-item"><div class="detail-label">Etapa Atual</div><div class="detail-value" style="color: ${nf.statusSLA === 'danger' ? 'var(--danger)' : nf.statusSLA === 'warning' ? 'var(--warning)' : 'var(--success)'};">${nf.etapaAtual}</div></div>`;
     html += `<div class="detail-item"><div class="detail-label">Tempo Total</div><div class="detail-value">${formatarMinutos(nf.tempoTotalHoras)}</div></div>`;
     html += `<div class="detail-item"><div class="detail-label">Movimentacoes</div><div class="detail-value">${nf.totalMovimentacoes}</div></div>`;
     html += `</div>`;
@@ -353,16 +388,35 @@ async function verDetalhes(codi_lanc) {
         </button>
       </div>`;
 
-    ETAPAS_ORDEM.filter(e => e !== 'Liberado').forEach(e => {
-      const tempo = nf.temposEtapa[e] || 0;
-      const limite = SLA_CONFIG[e].limite; // 0.5h = 30min
+    // Mostrar apenas etapas que realmente apareceram nas movimentações (resumo)
+    // Agrupar tempos por etapa específica
+    const temposAgrupados = {};
+    if (nf.temposPorMovimentacao) {
+      nf.temposPorMovimentacao.forEach(tm => {
+        const etapa = tm.etapa;
+        if (!temposAgrupados[etapa]) {
+          temposAgrupados[etapa] = { tempo: 0, config: MAPEAMENTO_SETORES[tm.st_nota] || MAPEAMENTO_SETORES[tm.placa] };
+        }
+        temposAgrupados[etapa].tempo += tm.tempoHoras;
+      });
+    }
+
+    // Exibir etapas que tiveram movimentação
+    Object.keys(temposAgrupados).forEach(etapa => {
+      const info = temposAgrupados[etapa];
+      const tempo = info.tempo;
+      const limite = info.config ? info.config.limite : 0.5;
       const pct = limite > 0 ? (tempo / limite) * 100 : 0;
       const cor = pct > 100 ? 'var(--danger)' : pct > 80 ? 'var(--warning)' : 'var(--success)';
+      const icone = info.config ? info.config.icone : 'fa-circle';
+      const corIcone = info.config ? info.config.cor : '#64748b';
+
       html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);">
-        <span style="font-size: 0.85rem;"><i class="fas ${SLA_CONFIG[e].icone}" style="color: ${SLA_CONFIG[e].cor}; margin-right: 8px;"></i>${SLA_CONFIG[e].nome}</span>
+        <span style="font-size: 0.85rem;"><i class="fas ${icone}" style="color: ${corIcone}; margin-right: 8px;"></i>${etapa}</span>
         <span style="font-weight: 600; color: ${cor}; font-size: 0.85rem;">${formatarMinutos(tempo)} / 30min (${pct.toFixed(0)}%)</span>
       </div>`;
     });
+
     html += `</div>`;
 
     body.innerHTML = html;
@@ -422,7 +476,7 @@ function verMovimentacoes() {
     <strong>NF:</strong> ${nf.num_nota} | <strong>Fornecedor:</strong> ${nf.nome_forn} | <strong>Total Movs:</strong> ${movs.length}
   </div>`;
 
-  // Tabela de movimentacoes
+  // Tabela de movimentacoes - com linha específica do comercial
   html += `<div class="mov-table-wrapper">
     <table class="mov-table">
       <thead>
@@ -430,28 +484,38 @@ function verMovimentacoes() {
           <th>#</th>
           <th>Data/Hora</th>
           <th>Placa</th>
-          <th>Etapa</th>
+          <th>Setor (Linha)</th>
           <th>Status Placa</th>
           <th>Tipo Proc</th>
           <th>Status Nota</th>
           <th>Tipo Proc Nota</th>
+          <th>Tempo</th>
         </tr>
       </thead>
       <tbody>`;
 
   movs.forEach((mov, idx) => {
-    const etapa = MAPEAMENTO_ETAPAS[mov.placa]?.etapa || mov.placa;
-    const corEtapa = MAPEAMENTO_ETAPAS[mov.placa]?.cor || '#64748b';
+    const mapeamento = MAPEAMENTO_SETORES[mov.st_nota] || MAPEAMENTO_SETORES[mov.placa];
+    const etapa = mapeamento ? mapeamento.etapa : ('Placa ' + mov.placa);
+    const corEtapa = mapeamento ? mapeamento.cor : '#64748b';
+    const icone = mapeamento ? mapeamento.icone : 'fa-circle';
+
+    // Tempo desta movimentação (até a próxima)
+    let tempoMov = '-';
+    if (nf.temposPorMovimentacao && nf.temposPorMovimentacao[idx]) {
+      tempoMov = formatarMinutos(nf.temposPorMovimentacao[idx].tempoHoras);
+    }
 
     html += `<tr>
       <td style="font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
       <td>${formatarDataHora(mov.dt_hora)}</td>
       <td><span class="placa-badge">${mov.placa}</span></td>
-      <td style="color: ${corEtapa}; font-weight: 600;">${etapa}</td>
+      <td style="color: ${corEtapa}; font-weight: 600;"><i class="fas ${icone}" style="margin-right: 6px; font-size: 0.75rem;"></i>${etapa}</td>
       <td>${mov.nome_placa || mov.st_placa}</td>
       <td><span class="proc-badge">${mov.tipo_proc_placa || '-'}</span></td>
       <td>${mov.nome_nota || mov.st_nota}</td>
       <td><span class="proc-badge">${mov.tipo_proc_nota || '-'}</span></td>
+      <td style="font-weight: 600; color: var(--text-secondary);">${tempoMov}</td>
     </tr>`;
   });
 
@@ -463,13 +527,19 @@ function verMovimentacoes() {
     <div class="timeline">`;
 
   movs.forEach((mov, idx) => {
-    const etapa = MAPEAMENTO_ETAPAS[mov.placa];
+    const mapeamento = MAPEAMENTO_SETORES[mov.st_nota] || MAPEAMENTO_SETORES[mov.placa];
     const dotClass = idx === movs.length - 1 ? 'active' : 'done';
+
+    // Tempo desta movimentação
+    let tempoMov = '';
+    if (nf.temposPorMovimentacao && nf.temposPorMovimentacao[idx]) {
+      tempoMov = `<span style="color: var(--text-muted); margin-left: 8px;">(${formatarMinutos(nf.temposPorMovimentacao[idx].tempoHoras)})</span>`;
+    }
 
     html += `<div class="timeline-item">
       <div class="timeline-dot ${dotClass}"></div>
       <div class="timeline-content">
-        <h4><i class="fas ${etapa ? etapa.icone : 'fa-circle'}" style="color: ${etapa ? etapa.cor : '#64748b'};"></i> ${etapa ? etapa.etapa : 'Placa ' + mov.placa}</h4>
+        <h4><i class="fas ${mapeamento ? mapeamento.icone : 'fa-circle'}" style="color: ${mapeamento ? mapeamento.cor : '#64748b'};"></i> ${mapeamento ? mapeamento.etapa : 'Placa ' + mov.placa}${tempoMov}</h4>
         <p>${formatarDataHora(mov.dt_hora)}</p>
         <div class="timeline-meta">
           <span><i class="fas fa-tag"></i> ${mov.nome_placa || mov.st_placa}</span>
@@ -508,7 +578,7 @@ function exportarExcel() {
       d.nome_forn,
       d.codi_loja,
       d.dataPrimeiroLog || d.dtha_lanc,
-      SLA_CONFIG[d.etapaAtual]?.nome || d.etapaAtual,
+      d.etapaAtual,
       formatarMinutos(d.tempoTotalHoras),
       d.statusSLA,
       d.pctSLA.toFixed(1) + '%',
@@ -525,16 +595,23 @@ function exportarExcel() {
 }
 
 // ============================================================
-// UTILS
+// UTILS - FORMATACAO DE TEMPO
 // ============================================================
 function formatarMinutos(horas) {
   if (!horas || horas === 0) return '0min';
+
   const totalMinutos = Math.round(horas * 60);
   const h = Math.floor(totalMinutos / 60);
   const m = totalMinutos % 60;
-  if (h === 0) return m + 'min';
-  if (m === 0) return h + 'h';
-  return h + 'h ' + m + 'min';
+
+  // Se passou de 60 minutos (1 hora), mostrar formato Xh Ymin
+  if (totalMinutos >= 60) {
+    if (m === 0) return h + 'h';
+    return h + 'h ' + m + 'min';
+  }
+
+  // Menos de 1 hora
+  return m + 'min';
 }
 
 function formatarHoras(horas) {
