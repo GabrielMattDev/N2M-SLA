@@ -2,26 +2,6 @@
 
 Dashboard profissional para monitoramento de SLA de tratativas de Notas Fiscais, com conexao direta ao MySQL.
 
-## Banco de Dados (ja configurado)
-
-| Parametro | Valor |
-|-----------|-------|
-| Host | `n2m.lupus.intranet` |
-| Porta | `3306` |
-| Usuario | `recebimento` |
-| Senha | `m2bab` |
-| Database | `bdsi08common` |
-
-## Tabelas utilizadas
-
-- `cad_lanc_tb` - Lancamentos/notas fiscais
-- `cad_forn_tb` - Fornecedores
-- `cad_stus_tb` - Status
-- `cad_hlan_tb` - Historico de movimentacoes (timeline)
-- `cad_loja_tb` - Lojas
-
-## 🚀 Como Executar
-
 ### 1. Instalar Node.js
 Baixe em: https://nodejs.org/ (versao LTS recomendada)
 

@@ -6,11 +6,11 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 const pool = mysql.createPool({
-  host: process .env.DB_HOST|| 'COLOQUE SUA CONEXÃO AQUI',
+  host: process.env.DB_HOST || '........',
   port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'COLOQUE SUA USER AQUI'',
-  password: process.env.DB_PASSWORD || 'COLOQUE SUA SENHA AQUI'',
-  database: process.env.DB_NAME || 'COLOQUE SUA NAME AQUI'',
+  user: process.env.DB_USER || '...',
+  password: process.env.DB_PASSWORD || '...',
+  database: process.env.DB_NAME || '...',
   waitForConnections: true,
   connectionLimit: 10,
   maxIdle: 10,
