@@ -1,8 +1,12 @@
 // ============================================================
-// N2M SLA - API Server v3.3
+// N2M SLA - API Server v3.5
 // Node.js + Express + MySQL2
-// Ajustes: nomenclatura setores, cálculo SLA por movimentação, 
-// tempo total acumulado, formato Xh Ymin
+// Lógica SLA v3.5 FINAL:
+//   - Linha 1 = RM Loja Início (ponto de partida, NÃO conta SLA)
+//   - Tempo entre Linha A e Linha B vai para o SETOR da LINHA A
+//   - RM Loja Início NÃO acumula tempo no SLA total
+//   - Código 19 (Liberado) = fim da contagem, sem SLA
+//   - Tempo Total = soma dos tempos acumulados nos setores (exceto RM Loja Início)
 // ============================================================
 
 const express = require('express');
@@ -24,25 +28,26 @@ app.use(express.static(path.join(__dirname, 'public')));
 // MAPEAMENTO COMPLETO DE SETORES (stus_nota / stus_plca)
 // ============================================================
 const MAPEAMENTO_SETORES = {
-  '9999':  { etapa: 'RM Loja Início',              limiteSLA: 0.5, icone: 'fa-store',       cor: '#06b6d4', ordem: 1,  grupo: 'rm' },
-  '18':    { etapa: 'RM Central',                    limiteSLA: 0.5, icone: 'fa-warehouse',   cor: '#6366f1', ordem: 2,  grupo: 'rm' },
-  '10073': { etapa: 'Comercial Linha Seca',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10074': { etapa: 'Comercial Perecíveis',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10075': { etapa: 'Comercial Bazar',               limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10076': { etapa: 'Comercial Perfumaria',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10077': { etapa: 'Comercial Limpeza',             limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10078': { etapa: 'Comercial Mercearia',           limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10080': { etapa: 'Comercial Perfumaria Uso Pessoal', limiteSLA: 0.5, icone: 'fa-handshake', cor: '#a855f7', ordem: 3, grupo: 'comercial' },
-  '10081': { etapa: 'Comercial Hort',                limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10082': { etapa: 'Cadastro',                      limiteSLA: 0.5, icone: 'fa-id-card',     cor: '#ef4444', ordem: 4,  grupo: 'cadastro' },
-  '10083': { etapa: 'Encerramento',                  limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
-  '10084': { etapa: 'Tributário',                    limiteSLA: 0.5, icone: 'fa-calculator',  cor: '#f59e0b', ordem: 4,  grupo: 'tributario' },
-  '10085': { etapa: 'Encerramento',                  limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
-  '10086': { etapa: 'Erro RM Loja',                  limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 1, grupo: 'erro' },
-  '10087': { etapa: 'Encerramento',                  limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
-  '10090': { etapa: 'Comercial Bomboniere',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10096': { etapa: 'Comercial Mercearia Doce',      limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10098': { etapa: 'Erro RM Central',               limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' }
+  '9999':  { etapa: 'RM Loja Início',              limiteSLA: 0,   icone: 'fa-store',       cor: '#06b6d4', ordem: 1,  grupo: 'rm', contaSLA: false },
+  '18':    { etapa: 'RM Central',                    limiteSLA: 0.5, icone: 'fa-warehouse',   cor: '#6366f1', ordem: 2,  grupo: 'rm', contaSLA: true },
+  '10073': { etapa: 'Comercial Linha Seca',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10074': { etapa: 'Comercial Perecíveis',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10075': { etapa: 'Comercial Bazar',               limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10076': { etapa: 'Comercial Perfumaria',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10077': { etapa: 'Comercial Limpeza',             limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10078': { etapa: 'Comercial Mercearia',           limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10080': { etapa: 'Comercial Perfumaria Uso Pessoal', limiteSLA: 0.5, icone: 'fa-handshake', cor: '#a855f7', ordem: 3, grupo: 'comercial', contaSLA: true },
+  '10081': { etapa: 'Comercial Hort',                limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10082': { etapa: 'Cadastro',                      limiteSLA: 0.5, icone: 'fa-id-card',     cor: '#ef4444', ordem: 4,  grupo: 'cadastro', contaSLA: true },
+  '10083': { etapa: 'Encerramento',                  limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento', contaSLA: false },
+  '10084': { etapa: 'Tributário',                    limiteSLA: 0.5, icone: 'fa-calculator',  cor: '#f59e0b', ordem: 4,  grupo: 'tributario', contaSLA: true },
+  '10085': { etapa: 'Encerramento',                  limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento', contaSLA: false },
+  '10086': { etapa: 'Erro RM Loja',                  limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 1, grupo: 'erro', contaSLA: true },
+  '10087': { etapa: 'Encerramento',                  limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento', contaSLA: false },
+  '10090': { etapa: 'Comercial Bomboniere',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10096': { etapa: 'Comercial Mercearia Doce',      limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial', contaSLA: true },
+  '10098': { etapa: 'Erro RM Central',               limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro', contaSLA: true },
+  '19':    { etapa: 'Liberado',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado', contaSLA: false }
 };
 
 // Grupos para exibição resumida na tela principal
@@ -52,7 +57,8 @@ const GRUPOS_RESUMIDOS = {
   'cadastro': 'Cadastro',
   'tributario': 'Tributário',
   'encerramento': 'Encerrado',
-  'erro': 'Erro'
+  'erro': 'Erro',
+  'liberado': 'Liberado'
 };
 
 // Ordem das etapas para timeline
@@ -63,7 +69,8 @@ const ETAPAS_ORDEM = [
   'Comercial Perfumaria Uso Pessoal', 'Comercial Hort', 'Comercial Bomboniere',
   'Comercial Mercearia Doce',
   'Cadastro', 'Tributário',
-  'Encerramento', 'Erro RM Loja', 'Erro RM Central'
+  'Encerramento', 'Erro RM Loja', 'Erro RM Central',
+  'Liberado'
 ];
 
 // ============================================================
@@ -242,6 +249,16 @@ function agruparNotas(rows) {
   return Array.from(map.values());
 }
 
+// ============================================================
+// CÁLCULO DE SLA - LÓGICA v3.5 FINAL
+// ============================================================
+// REGRAS:
+// 1. Linha 1 = RM Loja Início (ponto de partida)
+// 2. Tempo entre Linha A e Linha B vai para o SETOR da LINHA A
+// 3. RM Loja Início NÃO acumula tempo no SLA (contaSLA: false)
+// 4. Código 19 (Liberado) = fim da contagem, sem SLA
+// 5. Tempo Total = soma dos tempos acumulados nos setores que contam SLA
+// ============================================================
 function calcularSLA(notas) {
   return notas.map(nota => {
     const movs = nota.movimentacoes.sort((a, b) => 
@@ -251,95 +268,194 @@ function calcularSLA(notas) {
     // Data do primeiro log (hl.dtha_hlan)
     const dataPrimeiroLog = movs.length > 0 ? movs[0].dt_hora : nota.dtha_lanc;
 
-    // === CÁLCULO DE TEMPO POR MOVIMENTAÇÃO ===
-    // Cada movimentação gera um tempo = diferença até a PRÓXIMA movimentação
-    // A última movimentação gera tempo = diferença até AGORA
+    // === CÁLCULO POR SETOR ACUMULADO v3.5 FINAL ===
+    // Regra: tempo entre linha A e linha B vai para o SETOR da LINHA A
+    // RM Loja Início NÃO acumula tempo no SLA total
+    // Código 19 = Liberado, fim da contagem
 
-    const temposPorMovimentacao = [];
+    const temposPorSetor = {};     // { "RM Central": 47.17, "Comercial Hort": 4.5, ... }
+    const movimentacoesDetalhadas = []; // detalhe de cada transição
     let tempoTotalHoras = 0;
+    let isLiberado = false;
+    let etapaAtual = 'RM Loja Início';
+    let etapaAtualGrupo = 'rm';
+    let etapaAtualCodigo = '9999';
 
     for (let i = 0; i < movs.length; i++) {
       const movAtual = movs[i];
-      const dtInicio = new Date(movAtual.dt_hora);
+      const codigoAtual = String(movAtual.st_nota);
+      const mapeamentoAtual = MAPEAMENTO_SETORES[codigoAtual];
+      const setorAtual = mapeamentoAtual ? mapeamentoAtual.etapa : ('Placa ' + movAtual.placa);
+      const grupoAtual = mapeamentoAtual ? mapeamentoAtual.grupo : 'outro';
+      const contaSLAAtual = mapeamentoAtual ? mapeamentoAtual.contaSLA : true;
 
-      let dtFim;
-      let isUltima = false;
+      // Se chegou no código 19 (Liberado), marca como liberado e para
+      if (codigoAtual === '19') {
+        isLiberado = true;
+        etapaAtual = 'Liberado';
+        etapaAtualGrupo = 'liberado';
+        etapaAtualCodigo = '19';
 
-      if (i < movs.length - 1) {
-        // Tem próxima movimentação
-        dtFim = new Date(movs[i + 1].dt_hora);
-      } else {
-        // Última movimentação - tempo até agora
-        dtFim = new Date();
-        isUltima = true;
+        // Se não é a primeira linha, calcula o tempo da linha anterior até o 19
+        // Esse tempo vai para o setor da linha anterior
+        if (i > 0) {
+          const movAnterior = movs[i - 1];
+          const codAnterior = String(movAnterior.st_nota);
+          const mapAnterior = MAPEAMENTO_SETORES[codAnterior];
+          const setorAnterior = mapAnterior ? mapAnterior.etapa : ('Placa ' + movAnterior.placa);
+          const contaSLAAnterior = mapAnterior ? mapAnterior.contaSLA : true;
+
+          const dtInicio = new Date(movAnterior.dt_hora);
+          const dtFim = new Date(movAtual.dt_hora);
+          const horas = (dtFim - dtInicio) / (1000 * 60 * 60);
+          const tempoHoras = Math.max(0, horas);
+
+          // Sempre registra no temposPorSetor para histórico
+          if (!temposPorSetor[setorAnterior]) temposPorSetor[setorAnterior] = 0;
+          temposPorSetor[setorAnterior] += tempoHoras;
+
+          // Só soma no tempoTotal se o setor conta SLA
+          if (contaSLAAnterior) {
+            tempoTotalHoras += tempoHoras;
+          }
+
+          movimentacoesDetalhadas.push({
+            indice: i,
+            dt_inicio: movAnterior.dt_hora,
+            dt_fim: movAtual.dt_hora,
+            tempoHoras: tempoHoras,
+            setorOrigem: setorAnterior,
+            setorDestino: 'Liberado',
+            codigoOrigem: codAnterior,
+            codigoDestino: '19',
+            isLiberado: true,
+            contaSLA: contaSLAAnterior
+          });
+        }
+        break; // Para de contar - nota está liberada
       }
 
-      const horas = (dtFim - dtInicio) / (1000 * 60 * 60);
-      const tempoHoras = Math.max(0, horas);
+      // Se não é a primeira linha, calcula tempo desde a linha anterior
+      // O tempo vai para o setor da LINHA ANTERIOR (linha A)
+      if (i > 0) {
+        const movAnterior = movs[i - 1];
+        const codAnterior = String(movAnterior.st_nota);
+        const mapAnterior = MAPEAMENTO_SETORES[codAnterior];
+        const setorAnterior = mapAnterior ? mapAnterior.etapa : ('Placa ' + movAnterior.placa);
+        const contaSLAAnterior = mapAnterior ? mapAnterior.contaSLA : true;
 
-      const mapeamento = MAPEAMENTO_SETORES[movAtual.st_nota] || MAPEAMENTO_SETORES[movAtual.placa];
-      const etapa = mapeamento ? mapeamento.etapa : ('Placa ' + movAtual.placa);
-      const grupo = mapeamento ? mapeamento.grupo : 'outro';
+        const dtInicio = new Date(movAnterior.dt_hora);
+        const dtFim = new Date(movAtual.dt_hora);
+        const horas = (dtFim - dtInicio) / (1000 * 60 * 60);
+        const tempoHoras = Math.max(0, horas);
 
-      temposPorMovimentacao.push({
-        indice: i,
-        dt_inicio: movAtual.dt_hora,
-        dt_fim: isUltima ? null : movs[i + 1].dt_hora,
-        tempoHoras: tempoHoras,
-        etapa: etapa,
-        etapaEspecifica: etapa, // nome completo da linha comercial
-        grupo: grupo,
-        placa: movAtual.placa,
-        st_nota: movAtual.st_nota,
-        nome_placa: movAtual.nome_placa,
-        nome_nota: movAtual.nome_nota,
-        isUltima: isUltima
-      });
+        // Sempre registra no temposPorSetor para histórico completo
+        if (!temposPorSetor[setorAnterior]) temposPorSetor[setorAnterior] = 0;
+        temposPorSetor[setorAnterior] += tempoHoras;
 
-      tempoTotalHoras += tempoHoras;
+        // Só soma no tempoTotal se o setor conta SLA
+        if (contaSLAAnterior) {
+          tempoTotalHoras += tempoHoras;
+        }
+
+        movimentacoesDetalhadas.push({
+          indice: i,
+          dt_inicio: movAnterior.dt_hora,
+          dt_fim: movAtual.dt_hora,
+          tempoHoras: tempoHoras,
+          setorOrigem: setorAnterior,
+          setorDestino: setorAtual,
+          codigoOrigem: codAnterior,
+          codigoDestino: codigoAtual,
+          isLiberado: false,
+          contaSLA: contaSLAAnterior
+        });
+      }
+
+      // Atualiza etapa atual (se não for RM Loja Início)
+      if (setorAtual !== 'RM Loja Início') {
+        etapaAtual = setorAtual;
+        etapaAtualGrupo = grupoAtual;
+        etapaAtualCodigo = codigoAtual;
+      }
     }
 
-    // Etapa atual = última movimentação
-    const ultimaMov = temposPorMovimentacao[temposPorMovimentacao.length - 1];
-    const etapaAtual = ultimaMov ? ultimaMov.etapa : 'RM Loja Início';
-    const etapaAtualGrupo = ultimaMov ? ultimaMov.grupo : 'rm';
+    // Se NÃO está liberado, a última etapa acumula tempo até AGORA
+    if (!isLiberado && movs.length > 0) {
+      const ultimaMov = movs[movs.length - 1];
+      const codUltimo = String(ultimaMov.st_nota);
+      const mapUltimo = MAPEAMENTO_SETORES[codUltimo];
+      const setorUltimo = mapUltimo ? mapUltimo.etapa : ('Placa ' + ultimaMov.placa);
+      const contaSLAUltimo = mapUltimo ? mapUltimo.contaSLA : true;
+
+      // Se a última etapa não é RM Loja Início nem Liberado, acumula tempo até agora
+      if (setorUltimo !== 'RM Loja Início' && setorUltimo !== 'Liberado') {
+        const dtUltima = new Date(ultimaMov.dt_hora);
+        const agora = new Date();
+        const horas = (agora - dtUltima) / (1000 * 60 * 60);
+        const tempoHoras = Math.max(0, horas);
+
+        if (!temposPorSetor[setorUltimo]) temposPorSetor[setorUltimo] = 0;
+        temposPorSetor[setorUltimo] += tempoHoras;
+
+        if (contaSLAUltimo) {
+          tempoTotalHoras += tempoHoras;
+        }
+
+        movimentacoesDetalhadas.push({
+          indice: movs.length,
+          dt_inicio: ultimaMov.dt_hora,
+          dt_fim: null, // até agora
+          tempoHoras: tempoHoras,
+          setorOrigem: setorUltimo,
+          setorDestino: setorUltimo,
+          codigoOrigem: codUltimo,
+          codigoDestino: codUltimo,
+          isAtual: true,
+          isLiberado: false,
+          contaSLA: contaSLAUltimo
+        });
+      }
+    }
 
     // Status SLA da etapa atual
-    const configEtapa = MAPEAMENTO_SETORES[ultimaMov?.st_nota] || MAPEAMENTO_SETORES[ultimaMov?.placa];
+    const configEtapa = MAPEAMENTO_SETORES[etapaAtualCodigo];
     const limiteSLA = configEtapa ? configEtapa.limiteSLA : 0.5;
-    const tempoNaEtapaAtual = ultimaMov ? ultimaMov.tempoHoras : 0;
-    const pctSLA = limiteSLA > 0 ? (tempoNaEtapaAtual / limiteSLA) * 100 : 0;
+    const tempoNaEtapaAtual = temposPorSetor[etapaAtual] || 0;
+    const pctSLA = (limiteSLA > 0 && !isLiberado) ? (tempoNaEtapaAtual / limiteSLA) * 100 : 0;
 
     let statusSLA = 'ok';
-    if (pctSLA > 100) statusSLA = 'danger';
+    if (isLiberado) statusSLA = 'liberado';
+    else if (pctSLA > 100) statusSLA = 'danger';
     else if (pctSLA > 80) statusSLA = 'warning';
 
-    // Timeline para o modal (todas as movimentações com tempo específico)
-    const timeline = temposPorMovimentacao.map((tm, idx) => {
-      const mapeamento = MAPEAMENTO_SETORES[tm.st_nota] || MAPEAMENTO_SETORES[tm.placa];
+    // Timeline para o modal (todas as movimentações)
+    const timeline = movs.map((mov, idx) => {
+      const codigo = String(mov.st_nota);
+      const mapeamento = MAPEAMENTO_SETORES[codigo];
+      const isLast = idx === movs.length - 1;
+
+      // Encontra o tempo acumulado deste setor (se houver)
+      let tempoDesteSetor = 0;
+      const movDetalhe = movimentacoesDetalhadas.find(m => m.indice === idx);
+      if (movDetalhe) tempoDesteSetor = movDetalhe.tempoHoras;
+
       return {
-        etapa: tm.etapa,
-        etapaEspecifica: tm.etapaEspecifica,
-        grupo: tm.grupo,
-        placa: tm.placa,
-        st_nota: tm.st_nota,
-        dt_hora: tm.dt_inicio,
-        dt_fim: tm.dt_fim,
-        tempoHoras: tm.tempoHoras,
+        etapa: mapeamento ? mapeamento.etapa : ('Placa ' + mov.placa),
+        etapaEspecifica: mapeamento ? mapeamento.etapa : ('Placa ' + mov.placa),
+        grupo: mapeamento ? mapeamento.grupo : 'outro',
+        placa: mov.placa,
+        st_nota: mov.st_nota,
+        dt_hora: mov.dt_hora,
+        tempoHoras: tempoDesteSetor,
         limiteSLA: mapeamento ? mapeamento.limiteSLA : 0.5,
         icone: mapeamento ? mapeamento.icone : 'fa-circle',
         cor: mapeamento ? mapeamento.cor : '#64748b',
-        isAtual: idx === temposPorMovimentacao.length - 1,
-        nome_placa: tm.nome_placa,
-        nome_nota: tm.nome_nota
+        isAtual: isLast && !isLiberado,
+        isLiberado: codigo === '19',
+        nome_placa: mov.nome_placa,
+        nome_nota: mov.nome_nota
       };
-    });
-
-    // Tempos agregados por etapa (para resumo no modal principal)
-    const temposEtapa = {};
-    temposPorMovimentacao.forEach(tm => {
-      if (!temposEtapa[tm.etapa]) temposEtapa[tm.etapa] = 0;
-      temposEtapa[tm.etapa] += tm.tempoHoras;
     });
 
     return {
@@ -347,13 +463,15 @@ function calcularSLA(notas) {
       dataPrimeiroLog,
       etapaAtual,
       etapaAtualGrupo,
+      etapaAtualCodigo,
       tempoTotalHoras,
       tempoNaEtapaAtual,
       limiteSLA,
       pctSLA,
       statusSLA,
-      temposEtapa,
-      temposPorMovimentacao,
+      isLiberado,
+      temposPorSetor,
+      movimentacoesDetalhadas,
       timeline,
       totalMovimentacoes: movs.length
     };
@@ -379,10 +497,11 @@ async function start() {
   app.listen(PORT, () => {
     console.log('');
     console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║              N2M SLA - Server v3.3                      ║');
+    console.log('║              N2M SLA - Server v3.5                      ║');
     console.log('╠══════════════════════════════════════════════════════════╣');
     console.log('║  SLA: 30min por etapa | Data: primeiro log              ║');
     console.log('║  Setores: RM Loja Inicio, RM Central, Comercial...      ║');
+    console.log('║  Código 19 = Liberado (sem SLA)                         ║');
     console.log('║  API: http://localhost:' + PORT + '/api                     ║');
     console.log('║  Relatorio: http://localhost:' + PORT + '                      ║');
     console.log('╚══════════════════════════════════════════════════════════╝');

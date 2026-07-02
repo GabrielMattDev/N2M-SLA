@@ -1,8 +1,10 @@
 // ============================================================
-// N2M SLA - Relatorio de Tratativas v3.3
+// N2M SLA - Relatorio de Tratativas v3.4
 // Layout simplificado: filtros + tabela + modal
-// Ajustes: nomenclatura setores, cálculo SLA por movimentação,
-// tempo total acumulado, formato Xh Ymin, linhas comerciais específicas
+// Ajustes v3.4:
+//   - Código 19 = Liberado (sem SLA, fim da contagem)
+//   - SLA acumulado por SETOR (tempo que nota ficou em cada setor)
+//   - Tempo Total = soma de todos os tempos acumulados
 // ============================================================
 
 const API_BASE = window.location.origin;
@@ -29,27 +31,14 @@ const MAPEAMENTO_SETORES = {
   '10087': { etapa: 'Encerramento',                  limite: 0,   nome: 'Encerramento',     icone: 'fa-check-circle',cor: '#10b981', ordem: 5,  grupo: 'encerramento' },
   '10090': { etapa: 'Comercial Bomboniere',          limite: 0.5, nome: 'Comercial Bomboniere', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10096': { etapa: 'Comercial Mercearia Doce',      limite: 0.5, nome: 'Comercial Mercearia Doce', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
-  '10098': { etapa: 'Erro RM Central',               limite: 0.5, nome: 'Erro RM Central',  icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' }
-};
-
-// Grupos para exibição resumida na tabela principal
-const GRUPOS_RESUMIDOS = {
-  'rm': 'RM',
-  'comercial': 'Comercial',
-  'cadastro': 'Cadastro',
-  'tributario': 'Tributário',
-  'encerramento': 'Encerrado',
-  'erro': 'Erro'
+  '10098': { etapa: 'Erro RM Central',               limite: 0.5, nome: 'Erro RM Central',  icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' },
+  '19':    { etapa: 'Liberado',                      limite: 0,   nome: 'Liberado',         icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
 };
 
 // Status pills CSS classes por grupo
 const STATUS_PILLS = {
-  'rm': 'rm',
-  'comercial': 'comercial',
-  'cadastro': 'cadastro',
-  'tributario': 'tributario',
-  'encerramento': 'liberado',
-  'erro': 'cadastro'
+  'rm': 'rm', 'comercial': 'comercial', 'cadastro': 'cadastro',
+  'tributario': 'tributario', 'encerramento': 'liberado', 'erro': 'cadastro', 'liberado': 'liberado'
 };
 
 let dadosNotas = [];
@@ -64,10 +53,8 @@ let notaAtualDetalhes = null;
 document.addEventListener('DOMContentLoaded', () => {
   const hoje = new Date();
   const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-
   document.getElementById('filterDataFim').value = formatarDataInput(hoje);
   document.getElementById('filterDataInicio').value = formatarDataInput(seteDiasAtras);
-
   carregarLojas();
   aplicarFiltros();
   verificarStatusDB();
@@ -83,7 +70,6 @@ async function fetchAPI(endpoint, params = {}) {
       url.searchParams.append(key, params[key]);
     }
   });
-
   const response = await fetch(url);
   if (!response.ok) throw new Error('Erro na API: ' + response.status);
   return await response.json();
@@ -94,7 +80,6 @@ async function carregarLojas() {
     const data = await fetchAPI('/api/lojas');
     const select = document.getElementById('filterLoja');
     select.innerHTML = '<option value="Todas">Todas</option>';
-
     if (data.success && data.data) {
       data.data.forEach(loja => {
         const option = document.createElement('option');
@@ -113,7 +98,6 @@ async function verificarStatusDB() {
     const data = await fetchAPI('/health');
     const dot = document.getElementById('dbStatusDot');
     const text = document.getElementById('dbStatusText');
-
     if (data.status === 'ok') {
       dot.style.background = 'var(--success)';
       dot.style.boxShadow = '0 0 8px var(--success)';
@@ -134,7 +118,6 @@ async function verificarStatusDB() {
 // ============================================================
 async function aplicarFiltros() {
   mostrarLoading(true);
-
   try {
     const params = {
       dataInicio: document.getElementById('filterDataInicio').value,
@@ -143,9 +126,7 @@ async function aplicarFiltros() {
       nota: document.getElementById('filterNota').value,
       fornecedor: document.getElementById('filterFornecedor').value
     };
-
     const data = await fetchAPI('/api/notas', params);
-
     if (data.success) {
       dadosNotas = data.data || [];
       dadosFiltrados = [...dadosNotas];
@@ -155,7 +136,6 @@ async function aplicarFiltros() {
     } else {
       mostrarToast(data.error || 'Erro ao carregar dados', 'error');
     }
-
   } catch (error) {
     console.error('Erro:', error);
     mostrarToast('Erro ao conectar: ' + error.message, 'error');
@@ -167,13 +147,11 @@ async function aplicarFiltros() {
 function limparFiltros() {
   const hoje = new Date();
   const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-
   document.getElementById('filterDataInicio').value = formatarDataInput(seteDiasAtras);
   document.getElementById('filterDataFim').value = formatarDataInput(hoje);
   document.getElementById('filterLoja').value = 'Todas';
   document.getElementById('filterNota').value = '';
   document.getElementById('filterFornecedor').value = '';
-
   aplicarFiltros();
 }
 
@@ -182,7 +160,6 @@ function limparFiltros() {
 // ============================================================
 function renderTabela() {
   const content = document.getElementById('dashboardContent');
-
   if (!dadosFiltrados || dadosFiltrados.length === 0) {
     content.innerHTML = `
       <div class="empty-state">
@@ -244,25 +221,30 @@ function renderTabela() {
       </div>
     </div>
   `;
-
   atualizarTabela();
 }
 
 function atualizarTabela() {
   const tbody = document.getElementById('tableBody');
   if (!tbody) return;
-
   const inicio = (paginaAtual - 1) * itensPorPagina;
   const fim = inicio + itensPorPagina;
   const pagina = dadosFiltrados.slice(inicio, fim);
 
   let html = '';
   for (const d of pagina) {
-    const config = MAPEAMENTO_SETORES[d.etapaAtual] || { grupo: 'rm', nome: d.etapaAtual };
+    const config = MAPEAMENTO_SETORES[d.etapaAtualCodigo] || MAPEAMENTO_SETORES[d.etapaAtual] || { grupo: 'rm', nome: d.etapaAtual };
     const grupo = config.grupo || 'rm';
     const pillClass = STATUS_PILLS[grupo] || 'rm';
 
-    const slaTexto = d.pctSLA > 100 ? 'Fora' : d.pctSLA > 80 ? 'Alerta' : 'OK';
+    let slaTexto, slaClass;
+    if (d.isLiberado) {
+      slaTexto = 'Liberado';
+      slaClass = 'liberado';
+    } else {
+      slaTexto = d.pctSLA > 100 ? 'Fora' : d.pctSLA > 80 ? 'Alerta' : 'OK';
+      slaClass = d.statusSLA;
+    }
 
     html += `<tr>
       <td class="td-nf">${d.num_nota}</td>
@@ -271,14 +253,13 @@ function atualizarTabela() {
       <td>${formatarData(d.dataPrimeiroLog || d.dtha_lanc)}</td>
       <td><span class="status-pill ${pillClass}"><i class="fas fa-circle"></i> ${config.nome || d.etapaAtual}</span></td>
       <td>${formatarMinutos(d.tempoTotalHoras)}</td>
-      <td><span class="sla-dot ${d.statusSLA}"></span> ${slaTexto} (${d.pctSLA.toFixed(0)}%)</td>
+      <td><span class="sla-dot ${slaClass}"></span> ${slaTexto} ${d.isLiberado ? '' : '(' + d.pctSLA.toFixed(0) + '%)'}</td>
       <td>${d.totalMovimentacoes}</td>
       <td><button class="btn-table btn-ver" data-codi="${d.codi_lanc}"><i class="fas fa-eye"></i> Ver</button></td>
     </tr>`;
   }
 
   tbody.innerHTML = html;
-
   document.querySelectorAll('.btn-ver').forEach(btn => {
     btn.addEventListener('click', function() { verDetalhes(this.dataset.codi); });
   });
@@ -289,31 +270,24 @@ function atualizarTabela() {
     const mostrando = Math.min(total, inicio + pagina.length);
     info.textContent = `Mostrando ${inicio + 1} a ${mostrando} de ${total} registros`;
   }
-
   atualizarPaginacao();
 }
 
 function atualizarPaginacao() {
   const container = document.getElementById('pagination');
   if (!container) return;
-
   const totalPaginas = Math.ceil(dadosFiltrados.length / itensPorPagina);
   if (totalPaginas <= 1) { container.innerHTML = ''; return; }
-
   let html = '';
   html += `<button class="page-btn" ${paginaAtual === 1 ? 'disabled' : ''} onclick="mudarPagina(1)"><i class="fas fa-angle-double-left"></i></button>`;
   html += `<button class="page-btn" ${paginaAtual === 1 ? 'disabled' : ''} onclick="mudarPagina(${paginaAtual - 1})"><i class="fas fa-angle-left"></i></button>`;
-
   const inicioPg = Math.max(1, paginaAtual - 2);
   const fimPg = Math.min(totalPaginas, paginaAtual + 2);
-
   for (let i = inicioPg; i <= fimPg; i++) {
     html += `<button class="page-btn ${i === paginaAtual ? 'active' : ''}" onclick="mudarPagina(${i})">${i}</button>`;
   }
-
   html += `<button class="page-btn" ${paginaAtual === totalPaginas ? 'disabled' : ''} onclick="mudarPagina(${paginaAtual + 1})"><i class="fas fa-angle-right"></i></button>`;
   html += `<button class="page-btn" ${paginaAtual === totalPaginas ? 'disabled' : ''} onclick="mudarPagina(${totalPaginas})"><i class="fas fa-angle-double-right"></i></button>`;
-
   container.innerHTML = html;
 }
 
@@ -345,19 +319,15 @@ function filtrarTabelaLocal() {
 // ============================================================
 async function verDetalhes(codi_lanc) {
   mostrarLoading(true);
-
   try {
     const data = await fetchAPI(`/api/notas/${codi_lanc}`);
-
     if (!data.success || !data.data) {
       mostrarToast('Nota nao encontrada', 'error');
       mostrarLoading(false);
       return;
     }
-
     const nf = data.data;
     notaAtualDetalhes = nf;
-
     const body = document.getElementById('modalBody');
 
     // Header info - 6 campos
@@ -374,54 +344,49 @@ async function verDetalhes(codi_lanc) {
     html += `</div>`;
 
     html += `<div class="detail-grid" style="margin-top: 12px;">`;
-    html += `<div class="detail-item"><div class="detail-label">Etapa Atual</div><div class="detail-value" style="color: ${nf.statusSLA === 'danger' ? 'var(--danger)' : nf.statusSLA === 'warning' ? 'var(--warning)' : 'var(--success)'};">${nf.etapaAtual}</div></div>`;
+    const corEtapa = nf.isLiberado ? 'var(--success)' : (nf.statusSLA === 'danger' ? 'var(--danger)' : nf.statusSLA === 'warning' ? 'var(--warning)' : 'var(--success)');
+    html += `<div class="detail-item"><div class="detail-label">Etapa Atual</div><div class="detail-value" style="color: ${corEtapa};">${nf.etapaAtual}</div></div>`;
     html += `<div class="detail-item"><div class="detail-label">Tempo Total</div><div class="detail-value">${formatarMinutos(nf.tempoTotalHoras)}</div></div>`;
     html += `<div class="detail-item"><div class="detail-label">Movimentacoes</div><div class="detail-value">${nf.totalMovimentacoes}</div></div>`;
     html += `</div>`;
 
-    // Tempos por Etapa - com olho de visao
+    // Tempos por Etapa - acumulados por setor
     html += `<div style="margin-top: 24px;">
       <div class="timeline-title" style="display: flex; justify-content: space-between; align-items: center;">
-        <span><i class="fas fa-clock"></i> Tempos por Etapa</span>
+        <span><i class="fas fa-clock"></i> Tempos por Etapa (Acumulado)</span>
         <button class="btn-table" onclick="verMovimentacoes()" style="padding: 6px 14px; font-size: 0.8rem;">
           <i class="fas fa-eye"></i> Ver Movimentacoes
         </button>
       </div>`;
 
-    // Mostrar apenas etapas que realmente apareceram nas movimentações (resumo)
-    // Agrupar tempos por etapa específica
-    const temposAgrupados = {};
-    if (nf.temposPorMovimentacao) {
-      nf.temposPorMovimentacao.forEach(tm => {
-        const etapa = tm.etapa;
-        if (!temposAgrupados[etapa]) {
-          temposAgrupados[etapa] = { tempo: 0, config: MAPEAMENTO_SETORES[tm.st_nota] || MAPEAMENTO_SETORES[tm.placa] };
+    // Exibir tempos acumulados por setor
+    if (nf.temposPorSetor) {
+      Object.keys(nf.temposPorSetor).forEach(etapa => {
+        const tempo = nf.temposPorSetor[etapa];
+        // Encontra config do setor
+        let config = null;
+        for (const cod in MAPEAMENTO_SETORES) {
+          if (MAPEAMENTO_SETORES[cod].etapa === etapa) {
+            config = MAPEAMENTO_SETORES[cod];
+            break;
+          }
         }
-        temposAgrupados[etapa].tempo += tm.tempoHoras;
+        const limite = config ? config.limite : 0.5;
+        const pct = (limite > 0 && !nf.isLiberado) ? (tempo / limite) * 100 : 0;
+        const cor = pct > 100 ? 'var(--danger)' : pct > 80 ? 'var(--warning)' : 'var(--success)';
+        const icone = config ? config.icone : 'fa-circle';
+        const corIcone = config ? config.cor : '#64748b';
+
+        html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);">
+          <span style="font-size: 0.85rem;"><i class="fas ${icone}" style="color: ${corIcone}; margin-right: 8px;"></i>${etapa}</span>
+          <span style="font-weight: 600; color: ${cor}; font-size: 0.85rem;">${formatarMinutos(tempo)} / 30min (${pct.toFixed(0)}%)</span>
+        </div>`;
       });
     }
-
-    // Exibir etapas que tiveram movimentação
-    Object.keys(temposAgrupados).forEach(etapa => {
-      const info = temposAgrupados[etapa];
-      const tempo = info.tempo;
-      const limite = info.config ? info.config.limite : 0.5;
-      const pct = limite > 0 ? (tempo / limite) * 100 : 0;
-      const cor = pct > 100 ? 'var(--danger)' : pct > 80 ? 'var(--warning)' : 'var(--success)';
-      const icone = info.config ? info.config.icone : 'fa-circle';
-      const corIcone = info.config ? info.config.cor : '#64748b';
-
-      html += `<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);">
-        <span style="font-size: 0.85rem;"><i class="fas ${icone}" style="color: ${corIcone}; margin-right: 8px;"></i>${etapa}</span>
-        <span style="font-weight: 600; color: ${cor}; font-size: 0.85rem;">${formatarMinutos(tempo)} / 30min (${pct.toFixed(0)}%)</span>
-      </div>`;
-    });
-
     html += `</div>`;
 
     body.innerHTML = html;
     document.getElementById('modalDetalhes').classList.add('active');
-
   } catch (error) {
     console.error('Erro ao carregar detalhes:', error);
     mostrarToast('Erro ao carregar detalhes', 'error');
@@ -447,7 +412,6 @@ function verMovimentacoes() {
   const nf = notaAtualDetalhes;
   const movs = nf.movimentacoes;
 
-  // Criar sub-modal dinamicamente se nao existir
   let subModal = document.getElementById('subModalMovs');
   if (!subModal) {
     subModal = document.createElement('div');
@@ -474,9 +438,10 @@ function verMovimentacoes() {
   // Info da nota
   let html = `<div style="margin-bottom: 20px; padding: 12px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border);">
     <strong>NF:</strong> ${nf.num_nota} | <strong>Fornecedor:</strong> ${nf.nome_forn} | <strong>Total Movs:</strong> ${movs.length}
+    ${nf.isLiberado ? ' | <span style="color: var(--success);"><i class="fas fa-check-circle"></i> Liberado</span>' : ''}
   </div>`;
 
-  // Tabela de movimentacoes - com linha específica do comercial
+  // Tabela de movimentacoes
   html += `<div class="mov-table-wrapper">
     <table class="mov-table">
       <thead>
@@ -489,7 +454,7 @@ function verMovimentacoes() {
           <th>Tipo Proc</th>
           <th>Status Nota</th>
           <th>Tipo Proc Nota</th>
-          <th>Tempo</th>
+          <th>Tempo Acumulado</th>
         </tr>
       </thead>
       <tbody>`;
@@ -500,10 +465,10 @@ function verMovimentacoes() {
     const corEtapa = mapeamento ? mapeamento.cor : '#64748b';
     const icone = mapeamento ? mapeamento.icone : 'fa-circle';
 
-    // Tempo desta movimentação (até a próxima)
-    let tempoMov = '-';
-    if (nf.temposPorMovimentacao && nf.temposPorMovimentacao[idx]) {
-      tempoMov = formatarMinutos(nf.temposPorMovimentacao[idx].tempoHoras);
+    // Encontra tempo acumulado deste setor
+    let tempoSetor = '-';
+    if (nf.temposPorSetor && nf.temposPorSetor[etapa]) {
+      tempoSetor = formatarMinutos(nf.temposPorSetor[etapa]);
     }
 
     html += `<tr>
@@ -515,7 +480,7 @@ function verMovimentacoes() {
       <td><span class="proc-badge">${mov.tipo_proc_placa || '-'}</span></td>
       <td>${mov.nome_nota || mov.st_nota}</td>
       <td><span class="proc-badge">${mov.tipo_proc_nota || '-'}</span></td>
-      <td style="font-weight: 600; color: var(--text-secondary);">${tempoMov}</td>
+      <td style="font-weight: 600; color: var(--text-secondary);">${tempoSetor}</td>
     </tr>`;
   });
 
@@ -529,17 +494,19 @@ function verMovimentacoes() {
   movs.forEach((mov, idx) => {
     const mapeamento = MAPEAMENTO_SETORES[mov.st_nota] || MAPEAMENTO_SETORES[mov.placa];
     const dotClass = idx === movs.length - 1 ? 'active' : 'done';
+    const isLiberado = String(mov.st_nota) === '19';
 
-    // Tempo desta movimentação
-    let tempoMov = '';
-    if (nf.temposPorMovimentacao && nf.temposPorMovimentacao[idx]) {
-      tempoMov = `<span style="color: var(--text-muted); margin-left: 8px;">(${formatarMinutos(nf.temposPorMovimentacao[idx].tempoHoras)})</span>`;
+    // Encontra tempo acumulado deste setor
+    let tempoSetor = '';
+    if (nf.temposPorSetor && mapeamento) {
+      const t = nf.temposPorSetor[mapeamento.etapa];
+      if (t) tempoSetor = `<span style="color: var(--text-muted); margin-left: 8px;">(${formatarMinutos(t)} acumulado)</span>`;
     }
 
     html += `<div class="timeline-item">
-      <div class="timeline-dot ${dotClass}"></div>
+      <div class="timeline-dot ${isLiberado ? 'done' : dotClass}"></div>
       <div class="timeline-content">
-        <h4><i class="fas ${mapeamento ? mapeamento.icone : 'fa-circle'}" style="color: ${mapeamento ? mapeamento.cor : '#64748b'};"></i> ${mapeamento ? mapeamento.etapa : 'Placa ' + mov.placa}${tempoMov}</h4>
+        <h4><i class="fas ${mapeamento ? mapeamento.icone : 'fa-circle'}" style="color: ${mapeamento ? mapeamento.cor : '#64748b'};"></i> ${mapeamento ? mapeamento.etapa : 'Placa ' + mov.placa}${tempoSetor}</h4>
         <p>${formatarDataHora(mov.dt_hora)}</p>
         <div class="timeline-meta">
           <span><i class="fas fa-tag"></i> ${mov.nome_placa || mov.st_placa}</span>
@@ -568,10 +535,8 @@ function exportarExcel() {
     mostrarToast('Nenhum dado para exportar', 'error');
     return;
   }
-
   const headers = ['Numero NF', 'Fornecedor', 'Loja', 'Data Lancamento', 'Etapa Atual', 'Tempo Total', 'Status SLA', 'Pct SLA', 'Movimentacoes'];
   let csv = headers.join(';') + '\n';
-
   dadosNotas.forEach(d => {
     csv += [
       d.num_nota,
@@ -585,7 +550,6 @@ function exportarExcel() {
       d.totalMovimentacoes
     ].join(';') + '\n';
   });
-
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -599,18 +563,13 @@ function exportarExcel() {
 // ============================================================
 function formatarMinutos(horas) {
   if (!horas || horas === 0) return '0min';
-
   const totalMinutos = Math.round(horas * 60);
   const h = Math.floor(totalMinutos / 60);
   const m = totalMinutos % 60;
-
-  // Se passou de 60 minutos (1 hora), mostrar formato Xh Ymin
   if (totalMinutos >= 60) {
     if (m === 0) return h + 'h';
     return h + 'h ' + m + 'min';
   }
-
-  // Menos de 1 hora
   return m + 'min';
 }
 
@@ -648,13 +607,10 @@ function mostrarToast(msg, tipo) {
   const container = document.querySelector('.toast-container') || criarToastContainer();
   const toast = document.createElement('div');
   toast.className = 'toast ' + tipo;
-
   const iconMap = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle' };
   const colorMap = { success: 'var(--success)', error: 'var(--danger)', info: 'var(--accent)' };
-
   toast.innerHTML = `<i class="fas ${iconMap[tipo]} toast-icon" style="color: ${colorMap[tipo]};"></i><span>${msg}</span>`;
   container.appendChild(toast);
-
   requestAnimationFrame(() => toast.classList.add('show'));
   setTimeout(() => {
     toast.classList.remove('show');
