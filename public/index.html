@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N2M SLA - Relatorio de Tratativas</title>
+<link rel="stylesheet" href="css/style.css">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <div class="logo-icon"><i class="fas fa-network-wired"></i></div>
+      <div class="logo-text">N2M <span>SLA</span></div>
+    </div>
+    <div class="page-title">Relatorio de Tratativas</div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-indicator">
+      <span class="status-dot" id="dbStatusDot"></span>
+      <span id="dbStatusText">Conectando...</span>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="exportarExcel()">
+      <i class="fas fa-file-excel"></i> Exportar
+    </button>
+  </div>
+</header>
+
+<!-- FILTERS BAR -->
+<div class="filters-bar">
+  <div class="filter-group">
+    <label><i class="fas fa-calendar-alt"></i> Data Inicio</label>
+    <input type="date" id="filterDataInicio" value="">
+  </div>
+  <div class="filter-group">
+    <label><i class="fas fa-calendar-alt"></i> Data Fim</label>
+    <input type="date" id="filterDataFim" value="">
+  </div>
+  <div class="filter-group">
+    <label><i class="fas fa-store"></i> Loja</label>
+    <select id="filterLoja">
+      <option value="Todas">Todas</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label><i class="fas fa-file-invoice"></i> Nota Fiscal</label>
+    <input type="text" id="filterNota" placeholder="Numero da NF...">
+  </div>
+  <div class="filter-group">
+    <label><i class="fas fa-truck"></i> Fornecedor</label>
+    <input type="text" id="filterFornecedor" placeholder="Nome do fornecedor...">
+  </div>
+  <button class="btn btn-primary btn-sm" onclick="aplicarFiltros()">
+    <i class="fas fa-search"></i> Buscar
+  </button>
+  <button class="btn btn-secondary btn-sm" onclick="limparFiltros()">
+    <i class="fas fa-eraser"></i> Limpar
+  </button>
+</div>
+
+<!-- CONTENT - APENAS TABELA -->
+<div class="content" id="dashboardContent">
+  <!-- Renderizado via JS -->
+</div>
+
+<!-- MODAL DETALHES -->
+<div class="modal-overlay" id="modalDetalhes" onclick="if(event.target===this)fecharModal()">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2><i class="fas fa-file-invoice"></i> Detalhes da Nota Fiscal</h2>
+      <button class="modal-close" onclick="fecharModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="fecharModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Carregando dados...</div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
