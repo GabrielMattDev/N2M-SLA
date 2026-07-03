@@ -1,10 +1,14 @@
 // ============================================================
-// N2M SLA - Relatorio de Tratativas v3.4
+// N2M SLA - Relatorio de Tratativas v3.8
 // Layout simplificado: filtros + tabela + modal
-// Ajustes v3.4:
-//   - Código 19 = Liberado (sem SLA, fim da contagem)
+// Ajustes v3.8:
+//   - Código 19 e 20 = Liberado (sem SLA, fim da contagem)
 //   - SLA acumulado por SETOR (tempo que nota ficou em cada setor)
 //   - Tempo Total = soma de todos os tempos acumulados
+//   - Ordenacao: maior SLA primeiro
+//   - Filtro: Pendente / Liberado / Todos
+//   - Alerta vermelho para notas com tempo total > 2h
+//   - Timeline: "Tempo de Etapa" mostra tempo real entre linha e proxima
 // ============================================================
 
 const API_BASE = window.location.origin;
@@ -32,8 +36,12 @@ const MAPEAMENTO_SETORES = {
   '10090': { etapa: 'Comercial Bomboniere',          limite: 0.5, nome: 'Comercial Bomboniere', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10096': { etapa: 'Comercial Mercearia Doce',      limite: 0.5, nome: 'Comercial Mercearia Doce', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10098': { etapa: 'Erro RM Central',               limite: 0.5, nome: 'Erro RM Central',  icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' },
-  '19':    { etapa: 'Liberado',                      limite: 0,   nome: 'Liberado',         icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
+  '19':    { etapa: 'Liberado',                      limite: 0,   nome: 'Liberado',         icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '20':    { etapa: 'Liberado',                      limite: 0,   nome: 'Liberado',         icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
 };
+
+// Códigos que representam fim do SLA (liberado/coletada)
+const CODIGOS_FIM_SLA = ['19', '20'];
 
 // Status pills CSS classes por grupo
 const STATUS_PILLS = {
@@ -124,7 +132,8 @@ async function aplicarFiltros() {
       dataFim: document.getElementById('filterDataFim').value,
       loja: document.getElementById('filterLoja').value,
       nota: document.getElementById('filterNota').value,
-      fornecedor: document.getElementById('filterFornecedor').value
+      fornecedor: document.getElementById('filterFornecedor').value,
+      status: document.getElementById('filterStatus').value  // v3.8: novo filtro de status
     };
     const data = await fetchAPI('/api/notas', params);
     if (data.success) {
@@ -152,6 +161,7 @@ function limparFiltros() {
   document.getElementById('filterLoja').value = 'Todas';
   document.getElementById('filterNota').value = '';
   document.getElementById('filterFornecedor').value = '';
+  document.getElementById('filterStatus').value = 'todos';  // v3.8: resetar status
   aplicarFiltros();
 }
 
@@ -177,7 +187,7 @@ function renderTabela() {
         <div class="section-title"><i class="fas fa-list"></i> Notas Fiscais - Detalhamento</div>
         <div class="table-actions">
           <span style="color: var(--text-muted); font-size: 0.8rem;">
-            <i class="fas fa-sort-amount-down"></i> Ordenado por: <strong>Nota mais recente</strong>
+            <i class="fas fa-sort-amount-down"></i> Ordenado por: <strong>Maior SLA</strong>
           </span>
         </div>
       </div>
@@ -209,6 +219,7 @@ function renderTabela() {
                 <th>SLA</th>
                 <th>Movs</th>
                 <th>Acoes</th>
+                <th>Alerta</th>
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -246,7 +257,15 @@ function atualizarTabela() {
       slaClass = d.statusSLA;
     }
 
-    html += `<tr>
+    // v3.8: Alerta vermelho na linha se tempo total > 2h e nao liberado
+    const alertaHtml = (d.alertaVermelho && !d.isLiberado) 
+      ? '<span class="alerta-vermelho" title="Tempo total estourou 2h"><i class="fas fa-exclamation-circle"></i></span>' 
+      : '';
+
+    // v3.8: Classe CSS para linha com alerta
+    const rowClass = (d.alertaVermelho && !d.isLiberado) ? 'row-alerta' : '';
+
+    html += `<tr class="${rowClass}">
       <td class="td-nf">${d.num_nota}</td>
       <td>${d.nome_forn}</td>
       <td>${d.codi_loja}</td>
@@ -256,6 +275,7 @@ function atualizarTabela() {
       <td><span class="sla-dot ${slaClass}"></span> ${slaTexto} ${d.isLiberado ? '' : '(' + d.pctSLA.toFixed(0) + '%)'}</td>
       <td>${d.totalMovimentacoes}</td>
       <td><button class="btn-table btn-ver" data-codi="${d.codi_lanc}"><i class="fas fa-eye"></i> Ver</button></td>
+      <td>${alertaHtml}</td>
     </tr>`;
   }
 
@@ -404,13 +424,14 @@ function fecharModal() {
 // SUB-MODAL: MOVIMENTACOES DETALHADAS
 // ============================================================
 function verMovimentacoes() {
-  if (!notaAtualDetalhes || !notaAtualDetalhes.movimentacoes) {
+  if (!notaAtualDetalhes || !notaAtualDetalhes.timeline) {
     mostrarToast('Nenhuma movimentacao disponivel', 'error');
     return;
   }
 
   const nf = notaAtualDetalhes;
-  const movs = nf.movimentacoes;
+  // v3.8: Usa timeline do backend (que tem tempo real por etapa)
+  const timeline = nf.timeline;
 
   let subModal = document.getElementById('subModalMovs');
   if (!subModal) {
@@ -437,7 +458,7 @@ function verMovimentacoes() {
 
   // Info da nota
   let html = `<div style="margin-bottom: 20px; padding: 12px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border);">
-    <strong>NF:</strong> ${nf.num_nota} | <strong>Fornecedor:</strong> ${nf.nome_forn} | <strong>Total Movs:</strong> ${movs.length}
+    <strong>NF:</strong> ${nf.num_nota} | <strong>Fornecedor:</strong> ${nf.nome_forn} | <strong>Total Movs:</strong> ${timeline.length}
     ${nf.isLiberado ? ' | <span style="color: var(--success);"><i class="fas fa-check-circle"></i> Liberado</span>' : ''}
   </div>`;
 
@@ -454,33 +475,38 @@ function verMovimentacoes() {
           <th>Tipo Proc</th>
           <th>Status Nota</th>
           <th>Tipo Proc Nota</th>
-          <th>Tempo Acumulado</th>
+          <th>Tempo de Etapa</th>
         </tr>
       </thead>
       <tbody>`;
 
-  movs.forEach((mov, idx) => {
-    const mapeamento = MAPEAMENTO_SETORES[mov.st_nota] || MAPEAMENTO_SETORES[mov.placa];
-    const etapa = mapeamento ? mapeamento.etapa : ('Placa ' + mov.placa);
-    const corEtapa = mapeamento ? mapeamento.cor : '#64748b';
-    const icone = mapeamento ? mapeamento.icone : 'fa-circle';
+  // v3.8: Usa timeline do backend em vez de movimentacoes brutas
+  timeline.forEach((mov, idx) => {
+    const mapeamento = MAPEAMENTO_SETORES[mov.st_nota];
+    const etapa = mov.etapa || ('Placa ' + mov.placa);
+    const corEtapa = mov.cor || '#64748b';
+    const icone = mov.icone || 'fa-circle';
 
-    // Encontra tempo acumulado deste setor
-    let tempoSetor = '-';
-    if (nf.temposPorSetor && nf.temposPorSetor[etapa]) {
-      tempoSetor = formatarMinutos(nf.temposPorSetor[etapa]);
+    // v3.8: Tempo real desta etapa (entre esta linha e a proxima)
+    const tempoEtapa = mov.tempoHoras || 0;
+    let tempoHtml = '-';
+    if (tempoEtapa > 0) {
+      tempoHtml = formatarMinutos(tempoEtapa);
     }
+
+    // v3.8: Se SLA estourado, pinta de vermelho
+    const tempoClass = mov.slaEstourado ? 'tempo-estourado' : '';
 
     html += `<tr>
       <td style="font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
       <td>${formatarDataHora(mov.dt_hora)}</td>
       <td><span class="placa-badge">${mov.placa}</span></td>
       <td style="color: ${corEtapa}; font-weight: 600;"><i class="fas ${icone}" style="margin-right: 6px; font-size: 0.75rem;"></i>${etapa}</td>
-      <td>${mov.nome_placa || mov.st_placa}</td>
+      <td>${mov.nome_placa || mov.st_nota}</td>
       <td><span class="proc-badge">${mov.tipo_proc_placa || '-'}</span></td>
       <td>${mov.nome_nota || mov.st_nota}</td>
       <td><span class="proc-badge">${mov.tipo_proc_nota || '-'}</span></td>
-      <td style="font-weight: 600; color: var(--text-secondary);">${tempoSetor}</td>
+      <td style="font-weight: 600; ${mov.slaEstourado ? 'color: var(--danger);' : 'color: var(--text-secondary);'}">${tempoHtml}</td>
     </tr>`;
   });
 
@@ -491,25 +517,23 @@ function verMovimentacoes() {
     <div class="timeline-title"><i class="fas fa-stream"></i> Sequencia de Movimentacoes</div>
     <div class="timeline">`;
 
-  movs.forEach((mov, idx) => {
-    const mapeamento = MAPEAMENTO_SETORES[mov.st_nota] || MAPEAMENTO_SETORES[mov.placa];
-    const dotClass = idx === movs.length - 1 ? 'active' : 'done';
-    const isLiberado = String(mov.st_nota) === '19';
+  timeline.forEach((mov, idx) => {
+    const isLiberado = CODIGOS_FIM_SLA.includes(String(mov.st_nota));
+    const dotClass = idx === timeline.length - 1 ? 'active' : 'done';
 
-    // Encontra tempo acumulado deste setor
-    let tempoSetor = '';
-    if (nf.temposPorSetor && mapeamento) {
-      const t = nf.temposPorSetor[mapeamento.etapa];
-      if (t) tempoSetor = `<span style="color: var(--text-muted); margin-left: 8px;">(${formatarMinutos(t)} acumulado)</span>`;
+    // v3.8: Tempo real desta etapa
+    let tempoEtapa = '';
+    if (mov.tempoHoras && mov.tempoHoras > 0) {
+      tempoEtapa = `<span style="color: var(--text-muted); margin-left: 8px;">(${formatarMinutos(mov.tempoHoras)} de etapa)</span>`;
     }
 
     html += `<div class="timeline-item">
       <div class="timeline-dot ${isLiberado ? 'done' : dotClass}"></div>
       <div class="timeline-content">
-        <h4><i class="fas ${mapeamento ? mapeamento.icone : 'fa-circle'}" style="color: ${mapeamento ? mapeamento.cor : '#64748b'};"></i> ${mapeamento ? mapeamento.etapa : 'Placa ' + mov.placa}${tempoSetor}</h4>
+        <h4><i class="fas ${mov.icone || 'fa-circle'}" style="color: ${mov.cor || '#64748b'};"></i> ${mov.etapa}${tempoEtapa}</h4>
         <p>${formatarDataHora(mov.dt_hora)}</p>
         <div class="timeline-meta">
-          <span><i class="fas fa-tag"></i> ${mov.nome_placa || mov.st_placa}</span>
+          <span><i class="fas fa-tag"></i> ${mov.nome_placa || mov.st_nota}</span>
           <span><i class="fas fa-file-invoice"></i> ${mov.nome_nota || mov.st_nota}</span>
         </div>
       </div>
