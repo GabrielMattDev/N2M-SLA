@@ -1,11 +1,15 @@
 // ============================================================
-// N2M SLA - API Server v3.6
+// N2M SLA - API Server v3.7
 // Node.js + Express + MySQL2
-// Lógica SLA v3.6:
+// Lógica SLA v3.7:
 //   - Tempo entre Linha A e Linha B vai para o SETOR da LINHA A
 //   - Todos os setores contam SLA (inclusive RM Loja Início, mas tempo = 0)
 //   - Código 19 (Liberado) = fim da contagem, sem SLA
 //   - Tempo Total = soma de TODOS os tempos acumulados
+//   - Ordenação padrão: maior SLA primeiro
+//   - Filtro: Pendente / Liberado / Todos
+//   - Alerta vermelho para notas com tempo total > 2h
+//   - Exclui fornecedores que começam com MULTICOM
 // ============================================================
 
 const express = require('express');
@@ -113,10 +117,13 @@ function buildBaseSQL() {
 // ============================================================
 app.get('/api/notas', async (req, res) => {
   try {
-    const { dataInicio, dataFim, loja, nota, fornecedor } = req.query;
+    const { dataInicio, dataFim, loja, nota, fornecedor, status } = req.query;
 
     let sql = buildBaseSQL();
     const params = [];
+
+    // Filtro: excluir fornecedores que começam com MULTICOM
+    sql += " AND fn.nome_forn NOT LIKE 'MULTICOM%'";
 
     if (dataInicio) {
       sql += ' AND DATE(la.dtha_lanc) >= ?';
@@ -139,6 +146,7 @@ app.get('/api/notas', async (req, res) => {
       params.push('%' + fornecedor + '%');
     }
 
+    // Ordenação SQL: por data do lançamento (depois reordenamos no JS por SLA)
     sql += ' ORDER BY la.dtha_lanc DESC, hl.dtha_hlan ASC';
 
     const rows = await query(sql, params);
@@ -146,10 +154,36 @@ app.get('/api/notas', async (req, res) => {
     const notasAgrupadas = agruparNotas(rows);
     const notasComSLA = calcularSLA(notasAgrupadas);
 
+    // Aplicar filtro de status (Pendente / Liberado / Todos)
+    let notasFiltradas = notasComSLA;
+    if (status === 'pendente') {
+      notasFiltradas = notasComSLA.filter(n => !n.isLiberado);
+    } else if (status === 'liberado') {
+      notasFiltradas = notasComSLA.filter(n => n.isLiberado);
+    }
+    // status === 'todos' ou undefined = não filtra
+
+    // Ordenação padrão: notas com maior SLA primeiro
+    // Prioridade: não liberados com maior pctSLA, depois liberados
+    notasFiltradas.sort((a, b) => {
+      // Se um está liberado e outro não, o não liberado vem primeiro
+      if (a.isLiberado && !b.isLiberado) return 1;
+      if (!a.isLiberado && b.isLiberado) return -1;
+
+      // Ambos liberados ou ambos não liberados: ordena por pctSLA decrescente
+      // Para liberados, pctSLA é 0, então ordena por tempoTotalHoras decrescente
+      if (a.isLiberado && b.isLiberado) {
+        return b.tempoTotalHoras - a.tempoTotalHoras;
+      }
+
+      // Não liberados: maior pctSLA primeiro
+      return b.pctSLA - a.pctSLA;
+    });
+
     res.json({
       success: true,
-      total: notasComSLA.length,
-      data: notasComSLA
+      total: notasFiltradas.length,
+      data: notasFiltradas
     });
 
   } catch (error) {
@@ -249,13 +283,15 @@ function agruparNotas(rows) {
 }
 
 // ============================================================
-// CÁLCULO DE SLA - LÓGICA v3.6 FINAL
+// CÁLCULO DE SLA - LÓGICA v3.7 FINAL
 // ============================================================
 // REGRAS:
 // 1. Tempo entre Linha A e Linha B vai para o SETOR da LINHA A
 // 2. Todos os setores contam SLA (inclusive RM Loja Início, mas tempo = 0)
 // 3. Código 19 (Liberado) = fim da contagem, sem SLA
 // 4. Tempo Total = soma de TODOS os tempos acumulados
+// 5. Alerta vermelho se tempoTotalHoras > 2
+// 6. Timeline mostra tempo real por etapa (não repetido)
 // ============================================================
 function calcularSLA(notas) {
   return notas.map(nota => {
@@ -266,7 +302,7 @@ function calcularSLA(notas) {
     // Data do primeiro log (hl.dtha_hlan)
     const dataPrimeiroLog = movs.length > 0 ? movs[0].dt_hora : nota.dtha_lanc;
 
-    // === CÁLCULO POR SETOR ACUMULADO v3.6 ===
+    // === CÁLCULO POR SETOR ACUMULADO v3.7 ===
     // Regra: tempo entre linha A e linha B vai para o SETOR da LINHA A
     // Todos os setores contam SLA
     // Código 19 = Liberado, fim da contagem
@@ -409,16 +445,47 @@ function calcularSLA(notas) {
     else if (pctSLA > 100) statusSLA = 'danger';
     else if (pctSLA > 80) statusSLA = 'warning';
 
+    // Alerta vermelho: tempo total > 2 horas
+    const alertaVermelho = tempoTotalHoras > 2;
+
     // Timeline para o modal (todas as movimentações)
+    // v3.7: Mostra o tempo REAL por etapa (não repetido)
+    // Cada linha da timeline representa uma movimentação (linha do banco)
+    // O tempo mostrado é o tempo que FICOU naquela etapa até a próxima
     const timeline = movs.map((mov, idx) => {
       const codigo = String(mov.st_nota);
       const mapeamento = MAPEAMENTO_SETORES[codigo];
       const isLast = idx === movs.length - 1;
 
       // Encontra o tempo acumulado deste setor (se houver)
-      let tempoDesteSetor = 0;
-      const movDetalhe = movimentacoesDetalhadas.find(m => m.indice === idx);
-      if (movDetalhe) tempoDesteSetor = movDetalhe.tempoHoras;
+      // v3.7: O tempo da linha é o tempo desde ESTA linha até a PRÓXIMA
+      // Ou seja, o tempo que esta etapa "consumiu" até a transição
+      let tempoDestaLinha = 0;
+      let slaEstourado = false;
+
+      // Busca a movimentação detalhada que SAI desta linha (indice = idx + 1)
+      // Ou seja, o tempo entre esta linha e a próxima vai para o setor desta linha
+      const movDetalheSaida = movimentacoesDetalhadas.find(m => m.indice === idx + 1);
+      if (movDetalheSaida) {
+        tempoDestaLinha = movDetalheSaida.tempoHoras;
+        // Verifica se o tempo desta etapa estourou o SLA de 30 min (0.5h)
+        const limite = mapeamento ? mapeamento.limiteSLA : 0.5;
+        if (limite > 0 && tempoDestaLinha > limite) {
+          slaEstourado = true;
+        }
+      }
+
+      // Se é a última linha e não está liberado, mostra o tempo acumulando até agora
+      if (isLast && !isLiberado) {
+        const movDetalheAtual = movimentacoesDetalhadas.find(m => m.isAtual);
+        if (movDetalheAtual) {
+          tempoDestaLinha = movDetalheAtual.tempoHoras;
+          const limite = mapeamento ? mapeamento.limiteSLA : 0.5;
+          if (limite > 0 && tempoDestaLinha > limite) {
+            slaEstourado = true;
+          }
+        }
+      }
 
       return {
         etapa: mapeamento ? mapeamento.etapa : ('Placa ' + mov.placa),
@@ -427,14 +494,15 @@ function calcularSLA(notas) {
         placa: mov.placa,
         st_nota: mov.st_nota,
         dt_hora: mov.dt_hora,
-        tempoHoras: tempoDesteSetor,
+        tempoHoras: tempoDestaLinha,
         limiteSLA: mapeamento ? mapeamento.limiteSLA : 0.5,
         icone: mapeamento ? mapeamento.icone : 'fa-circle',
         cor: mapeamento ? mapeamento.cor : '#64748b',
         isAtual: isLast && !isLiberado,
         isLiberado: codigo === '19',
         nome_placa: mov.nome_placa,
-        nome_nota: mov.nome_nota
+        nome_nota: mov.nome_nota,
+        slaEstourado: slaEstourado  // v3.7: indica se esta etapa estourou SLA
       };
     });
 
@@ -450,6 +518,7 @@ function calcularSLA(notas) {
       pctSLA,
       statusSLA,
       isLiberado,
+      alertaVermelho,  // v3.7: true se tempoTotalHoras > 2
       temposPorSetor,
       movimentacoesDetalhadas,
       timeline,
@@ -477,11 +546,15 @@ async function start() {
   app.listen(PORT, () => {
     console.log('');
     console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║              N2M SLA - Server v3.6                      ║');
+    console.log('║              N2M SLA - Server v3.7                      ║');
     console.log('╠══════════════════════════════════════════════════════════╣');
     console.log('║  SLA: 30min por etapa | Data: primeiro log              ║');
     console.log('║  Setores: RM Loja Inicio, RM Central, Comercial...      ║');
     console.log('║  Código 19 = Liberado (sem SLA)                         ║');
+    console.log('║  Ordenação: Maior SLA primeiro                          ║');
+    console.log('║  Filtro: Pendente / Liberado / Todos                    ║');
+    console.log('║  Alerta: Vermelho se tempo total > 2h                   ║');
+    console.log('║  Exclui: Fornecedores MULTICOM                          ║');
     console.log('║  API: http://localhost:' + PORT + '/api                     ║');
     console.log('║  Relatorio: http://localhost:' + PORT + '                      ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
