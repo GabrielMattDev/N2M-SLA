@@ -401,8 +401,8 @@ function calcularSLA(notas) {
         });
       }
 
-      // Atualiza etapa atual (se não for RM Loja Início)
-      if (setorAtual !== 'RM Loja Início') {
+      // Atualiza etapa atual (se não for RM Loja Início e NÃO for código de fim)
+      if (setorAtual !== 'RM Loja Início' && !CODIGOS_FIM_SLA.includes(codigoAtual)) {
         etapaAtual = setorAtual;
         etapaAtualGrupo = grupoAtual;
         etapaAtualCodigo = codigoAtual;
@@ -561,4 +561,4 @@ async function start() {
   });
 }
 
-start(); 
+start();

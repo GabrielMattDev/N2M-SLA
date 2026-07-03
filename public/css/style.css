@@ -764,3 +764,98 @@ tr:hover td { background: rgba(99,102,241,0.03); }
   .filter-group input, .filter-group select { width: 100%; }
   .modal { max-width: 100%; margin: 10px; }
 }
+
+/* ============================================================
+   N2M SLA - v3.8 FINAL
+   Estilos adicionais: Alerta chamativo + Liberado TD
+   ============================================================ */
+
+/* ===== ALERTA VERMELHO NA LINHA - MUITO CHAMATIVO ===== */
+.row-alerta {
+  position: relative;
+  border-left: 4px solid #ef4444 !important;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.03) 50%, transparent 100%) !important;
+  animation: row-alerta-pulse 1.5s ease-in-out infinite;
+}
+
+.row-alerta td {
+  background: transparent !important;
+}
+
+.row-alerta:hover td {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+@keyframes row-alerta-pulse {
+  0%, 100% { 
+    box-shadow: inset 4px 0 0 0 #ef4444, 0 0 0 0 rgba(239, 68, 68, 0);
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.03) 50%, transparent 100%) !important;
+  }
+  50% { 
+    box-shadow: inset 4px 0 0 0 #ef4444, 0 0 20px 0 rgba(239, 68, 68, 0.15);
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.18) 0%, rgba(239, 68, 68, 0.05) 50%, transparent 100%) !important;
+  }
+}
+
+/* Ícone de alerta piscante */
+.alerta-vermelho {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-radius: 50%;
+  color: white;
+  font-size: 0.85rem;
+  animation: alerta-blink 0.8s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+}
+
+@keyframes alerta-blink {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% { 
+    opacity: 0.85; 
+    transform: scale(1.15);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+/* ===== TEMPO ESTOURADO NA TIMELINE ===== */
+.tempo-estourado {
+  color: #ef4444 !important;
+  font-weight: 700;
+}
+
+/* ===== STATUS SELECT NO FILTRO ===== */
+#filterStatus {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  min-width: 140px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+#filterStatus:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+#filterStatus option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}

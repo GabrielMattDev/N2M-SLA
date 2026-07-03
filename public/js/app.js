@@ -270,7 +270,7 @@ function atualizarTabela() {
       <td>${d.nome_forn}</td>
       <td>${d.codi_loja}</td>
       <td>${formatarData(d.dataPrimeiroLog || d.dtha_lanc)}</td>
-      <td><span class="status-pill ${pillClass}"><i class="fas fa-circle"></i> ${config.nome || d.etapaAtual}</span></td>
+      <td><span class="status-pill ${pillClass}"><i class="fas fa-circle"></i> ${d.isLiberado ? 'Liberado' : (config.nome || d.etapaAtual)}</span></td>
       <td>${formatarMinutos(d.tempoTotalHoras)}</td>
       <td><span class="sla-dot ${slaClass}"></span> ${slaTexto} ${d.isLiberado ? '' : '(' + d.pctSLA.toFixed(0) + '%)'}</td>
       <td>${d.totalMovimentacoes}</td>
