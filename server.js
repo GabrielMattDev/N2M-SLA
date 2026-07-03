@@ -1,15 +1,16 @@
 // ============================================================
-// N2M SLA - API Server v3.7
+// N2M SLA - API Server v3.8
 // Node.js + Express + MySQL2
-// Lógica SLA v3.7:
+// Lógica SLA v3.8:
 //   - Tempo entre Linha A e Linha B vai para o SETOR da LINHA A
 //   - Todos os setores contam SLA (inclusive RM Loja Início, mas tempo = 0)
-//   - Código 19 (Liberado) = fim da contagem, sem SLA
+//   - Código 19 e 20 (Liberado/Coletada) = fim da contagem, sem SLA
 //   - Tempo Total = soma de TODOS os tempos acumulados
 //   - Ordenação padrão: maior SLA primeiro
 //   - Filtro: Pendente / Liberado / Todos
-//   - Alerta vermelho para notas com tempo total > 2h
+//   - Alerta vermelho para notas com tempo total > 2 horas
 //   - Exclui fornecedores que começam com MULTICOM
+//   - Timeline: "Tempo de Etapa" mostra tempo real entre linha e próxima
 // ============================================================
 
 const express = require('express');
@@ -50,8 +51,12 @@ const MAPEAMENTO_SETORES = {
   '10090': { etapa: 'Comercial Bomboniere',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10096': { etapa: 'Comercial Mercearia Doce',      limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10098': { etapa: 'Erro RM Central',               limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' },
-  '19':    { etapa: 'Liberado',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
+  '19':    { etapa: 'Liberado',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '20':    { etapa: 'Coletada',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
 };
+
+// Códigos que representam fim do SLA (liberado/coletada)
+const CODIGOS_FIM_SLA = ['19', '20'];
 
 // Grupos para exibição resumida na tela principal
 const GRUPOS_RESUMIDOS = {
@@ -73,7 +78,7 @@ const ETAPAS_ORDEM = [
   'Comercial Mercearia Doce',
   'Cadastro', 'Tributário',
   'Encerramento', 'Erro RM Loja', 'Erro RM Central',
-  'Liberado'
+  'Liberado', 'Coletada'
 ];
 
 // ============================================================
@@ -283,15 +288,15 @@ function agruparNotas(rows) {
 }
 
 // ============================================================
-// CÁLCULO DE SLA - LÓGICA v3.7 FINAL
+// CÁLCULO DE SLA - LÓGICA v3.8 FINAL
 // ============================================================
 // REGRAS:
 // 1. Tempo entre Linha A e Linha B vai para o SETOR da LINHA A
 // 2. Todos os setores contam SLA (inclusive RM Loja Início, mas tempo = 0)
-// 3. Código 19 (Liberado) = fim da contagem, sem SLA
+// 3. Código 19 e 20 (Liberado/Coletada) = fim da contagem, sem SLA
 // 4. Tempo Total = soma de TODOS os tempos acumulados
 // 5. Alerta vermelho se tempoTotalHoras > 2
-// 6. Timeline mostra tempo real por etapa (não repetido)
+// 6. Timeline "Tempo de Etapa": tempo REAL entre esta linha e a próxima
 // ============================================================
 function calcularSLA(notas) {
   return notas.map(nota => {
@@ -302,13 +307,10 @@ function calcularSLA(notas) {
     // Data do primeiro log (hl.dtha_hlan)
     const dataPrimeiroLog = movs.length > 0 ? movs[0].dt_hora : nota.dtha_lanc;
 
-    // === CÁLCULO POR SETOR ACUMULADO v3.7 ===
-    // Regra: tempo entre linha A e linha B vai para o SETOR da LINHA A
-    // Todos os setores contam SLA
-    // Código 19 = Liberado, fim da contagem
-
+    // === CÁLCULO POR SETOR ACUMULADO v3.8 ===
     const temposPorSetor = {};     // { "RM Loja Início": 0, "RM Central": 84.35, ... }
     const movimentacoesDetalhadas = []; // detalhe de cada transição
+    const tempoPorLinha = [];      // v3.8: tempo real de cada linha (para timeline)
     let tempoTotalHoras = 0;
     let isLiberado = false;
     let etapaAtual = 'RM Loja Início';
@@ -322,14 +324,14 @@ function calcularSLA(notas) {
       const setorAtual = mapeamentoAtual ? mapeamentoAtual.etapa : ('Placa ' + movAtual.placa);
       const grupoAtual = mapeamentoAtual ? mapeamentoAtual.grupo : 'outro';
 
-      // Se chegou no código 19 (Liberado), marca como liberado e para
-      if (codigoAtual === '19') {
+      // Se chegou no código de fim (19 ou 20), marca como liberado e para
+      if (CODIGOS_FIM_SLA.includes(codigoAtual)) {
         isLiberado = true;
-        etapaAtual = 'Liberado';
+        etapaAtual = mapeamentoAtual ? mapeamentoAtual.etapa : 'Liberado';
         etapaAtualGrupo = 'liberado';
-        etapaAtualCodigo = '19';
+        etapaAtualCodigo = codigoAtual;
 
-        // Se não é a primeira linha, calcula o tempo da linha anterior até o 19
+        // Se não é a primeira linha, calcula o tempo da linha anterior até o fim
         // Esse tempo vai para o setor da linha anterior (linha A)
         if (i > 0) {
           const movAnterior = movs[i - 1];
@@ -347,19 +349,22 @@ function calcularSLA(notas) {
           temposPorSetor[setorAnterior] += tempoHoras;
           tempoTotalHoras += tempoHoras;
 
+          // v3.8: tempo da linha anterior (i-1) é o tempo até esta linha (i)
+          tempoPorLinha[i - 1] = tempoHoras;
+
           movimentacoesDetalhadas.push({
             indice: i,
             dt_inicio: movAnterior.dt_hora,
             dt_fim: movAtual.dt_hora,
             tempoHoras: tempoHoras,
             setorOrigem: setorAnterior,
-            setorDestino: 'Liberado',
+            setorDestino: setorAtual,
             codigoOrigem: codAnterior,
-            codigoDestino: '19',
+            codigoDestino: codigoAtual,
             isLiberado: true
           });
         }
-        break; // Para de contar - nota está liberada
+        break; // Para de contar - nota está liberada/coletada
       }
 
       // Se não é a primeira linha, calcula tempo desde a linha anterior
@@ -379,6 +384,9 @@ function calcularSLA(notas) {
         if (!temposPorSetor[setorAnterior]) temposPorSetor[setorAnterior] = 0;
         temposPorSetor[setorAnterior] += tempoHoras;
         tempoTotalHoras += tempoHoras;
+
+        // v3.8: tempo da linha anterior (i-1) é o tempo até esta linha (i)
+        tempoPorLinha[i - 1] = tempoHoras;
 
         movimentacoesDetalhadas.push({
           indice: i,
@@ -408,8 +416,8 @@ function calcularSLA(notas) {
       const mapUltimo = MAPEAMENTO_SETORES[codUltimo];
       const setorUltimo = mapUltimo ? mapUltimo.etapa : ('Placa ' + ultimaMov.placa);
 
-      // Se a última etapa não é Liberado, acumula tempo até agora
-      if (setorUltimo !== 'Liberado') {
+      // Se a última etapa não é fim, acumula tempo até agora
+      if (!CODIGOS_FIM_SLA.includes(codUltimo)) {
         const dtUltima = new Date(ultimaMov.dt_hora);
         const agora = new Date();
         const horas = (agora - dtUltima) / (1000 * 60 * 60);
@@ -418,6 +426,9 @@ function calcularSLA(notas) {
         if (!temposPorSetor[setorUltimo]) temposPorSetor[setorUltimo] = 0;
         temposPorSetor[setorUltimo] += tempoHoras;
         tempoTotalHoras += tempoHoras;
+
+        // v3.8: tempo da última linha
+        tempoPorLinha[movs.length - 1] = tempoHoras;
 
         movimentacoesDetalhadas.push({
           indice: movs.length,
@@ -449,42 +460,21 @@ function calcularSLA(notas) {
     const alertaVermelho = tempoTotalHoras > 2;
 
     // Timeline para o modal (todas as movimentações)
-    // v3.7: Mostra o tempo REAL por etapa (não repetido)
-    // Cada linha da timeline representa uma movimentação (linha do banco)
-    // O tempo mostrado é o tempo que FICOU naquela etapa até a próxima
+    // v3.8: "Tempo de Etapa" = tempo REAL entre esta linha e a próxima
     const timeline = movs.map((mov, idx) => {
       const codigo = String(mov.st_nota);
       const mapeamento = MAPEAMENTO_SETORES[codigo];
       const isLast = idx === movs.length - 1;
 
-      // Encontra o tempo acumulado deste setor (se houver)
-      // v3.7: O tempo da linha é o tempo desde ESTA linha até a PRÓXIMA
-      // Ou seja, o tempo que esta etapa "consumiu" até a transição
-      let tempoDestaLinha = 0;
+      // v3.8: O tempo desta linha é o tempo desde ESTA linha até a PRÓXIMA
+      // tempoPorLinha[idx] contém o tempo calculado no loop acima
+      let tempoDestaLinha = tempoPorLinha[idx] || 0;
       let slaEstourado = false;
 
-      // Busca a movimentação detalhada que SAI desta linha (indice = idx + 1)
-      // Ou seja, o tempo entre esta linha e a próxima vai para o setor desta linha
-      const movDetalheSaida = movimentacoesDetalhadas.find(m => m.indice === idx + 1);
-      if (movDetalheSaida) {
-        tempoDestaLinha = movDetalheSaida.tempoHoras;
-        // Verifica se o tempo desta etapa estourou o SLA de 30 min (0.5h)
-        const limite = mapeamento ? mapeamento.limiteSLA : 0.5;
-        if (limite > 0 && tempoDestaLinha > limite) {
-          slaEstourado = true;
-        }
-      }
-
-      // Se é a última linha e não está liberado, mostra o tempo acumulando até agora
-      if (isLast && !isLiberado) {
-        const movDetalheAtual = movimentacoesDetalhadas.find(m => m.isAtual);
-        if (movDetalheAtual) {
-          tempoDestaLinha = movDetalheAtual.tempoHoras;
-          const limite = mapeamento ? mapeamento.limiteSLA : 0.5;
-          if (limite > 0 && tempoDestaLinha > limite) {
-            slaEstourado = true;
-          }
-        }
+      // Verifica se o tempo desta etapa estourou o SLA de 30 min (0.5h)
+      const limite = mapeamento ? mapeamento.limiteSLA : 0.5;
+      if (limite > 0 && tempoDestaLinha > limite) {
+        slaEstourado = true;
       }
 
       return {
@@ -494,15 +484,15 @@ function calcularSLA(notas) {
         placa: mov.placa,
         st_nota: mov.st_nota,
         dt_hora: mov.dt_hora,
-        tempoHoras: tempoDestaLinha,
+        tempoHoras: tempoDestaLinha,  // v3.8: tempo real desta linha até a próxima
         limiteSLA: mapeamento ? mapeamento.limiteSLA : 0.5,
         icone: mapeamento ? mapeamento.icone : 'fa-circle',
         cor: mapeamento ? mapeamento.cor : '#64748b',
         isAtual: isLast && !isLiberado,
-        isLiberado: codigo === '19',
+        isLiberado: CODIGOS_FIM_SLA.includes(codigo),
         nome_placa: mov.nome_placa,
         nome_nota: mov.nome_nota,
-        slaEstourado: slaEstourado  // v3.7: indica se esta etapa estourou SLA
+        slaEstourado: slaEstourado  // v3.8: indica se esta etapa estourou SLA
       };
     });
 
@@ -518,7 +508,7 @@ function calcularSLA(notas) {
       pctSLA,
       statusSLA,
       isLiberado,
-      alertaVermelho,  // v3.7: true se tempoTotalHoras > 2
+      alertaVermelho,  // v3.8: true se tempoTotalHoras > 2
       temposPorSetor,
       movimentacoesDetalhadas,
       timeline,
@@ -546,11 +536,11 @@ async function start() {
   app.listen(PORT, () => {
     console.log('');
     console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║              N2M SLA - Server v3.7                      ║');
+    console.log('║              N2M SLA - Server v3.8                      ║');
     console.log('╠══════════════════════════════════════════════════════════╣');
     console.log('║  SLA: 30min por etapa | Data: primeiro log              ║');
     console.log('║  Setores: RM Loja Inicio, RM Central, Comercial...      ║');
-    console.log('║  Código 19 = Liberado (sem SLA)                         ║');
+    console.log('║  Código 19/20 = Liberado/Coletada (sem SLA)             ║');
     console.log('║  Ordenação: Maior SLA primeiro                          ║');
     console.log('║  Filtro: Pendente / Liberado / Todos                    ║');
     console.log('║  Alerta: Vermelho se tempo total > 2h                   ║');
