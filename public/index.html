@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>N2M SLA - Relatorio de Tratativas v3.3</title>
+<title>N2M SLA - Relatorio de Tratativas v3.8</title>
 <link rel="stylesheet" href="css/style.css">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -53,6 +54,15 @@
   <div class="filter-group">
     <label><i class="fas fa-truck"></i> Fornecedor</label>
     <input type="text" id="filterFornecedor" placeholder="Nome do fornecedor...">
+  </div>
+  <!-- v3.8: Filtro de Status -->
+  <div class="filter-group">
+    <label><i class="fas fa-filter"></i> Status</label>
+    <select id="filterStatus">
+      <option value="todos">Todos</option>
+      <option value="pendente">Pendente</option>
+      <option value="liberado">Liberado</option>
+    </select>
   </div>
   <button class="btn btn-primary btn-sm" onclick="aplicarFiltros()">
     <i class="fas fa-search"></i> Buscar
