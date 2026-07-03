@@ -51,12 +51,32 @@ const MAPEAMENTO_SETORES = {
   '10090': { etapa: 'Comercial Bomboniere',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10096': { etapa: 'Comercial Mercearia Doce',      limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10098': { etapa: 'Erro RM Central',               limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' },
+  '12':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '13':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '14':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '15':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '21':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '25':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '30':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '31':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '32':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '37':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '39':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '43':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10030': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10038': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10060': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10061': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10063': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10072': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10085': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10087': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '19':    { etapa: 'Liberado',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '20':    { etapa: 'Coletada',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
 };
 
 // Códigos que representam fim do SLA (liberado/coletada)
-const CODIGOS_FIM_SLA = ['19', '20'];
+const CODIGOS_FIM_SLA = ['19', '20', '12', '13', '14', '15', '21', '25', '30', '31', '32', '37', '39', '43', '10030', '10038', '10060', '10061', '10063', '10072', '10085', '10087'];
 
 // Grupos para exibição resumida na tela principal
 const GRUPOS_RESUMIDOS = {
@@ -319,9 +339,9 @@ function calcularSLA(notas) {
 
     for (let i = 0; i < movs.length; i++) {
       const movAtual = movs[i];
-      const codigoAtual = String(movAtual.st_nota);
+      const codigoAtual = String(movAtual.st_nota || '').trim();
       const mapeamentoAtual = MAPEAMENTO_SETORES[codigoAtual];
-      const setorAtual = mapeamentoAtual ? mapeamentoAtual.etapa : ('Placa ' + movAtual.placa);
+      const setorAtual = mapeamentoAtual ? mapeamentoAtual.etapa : (CODIGOS_FIM_SLA.includes(codigoAtual) ? 'Finalizado' : ('Placa ' + movAtual.placa));
       const grupoAtual = mapeamentoAtual ? mapeamentoAtual.grupo : 'outro';
 
       // Se chegou no código de fim (19 ou 20), marca como liberado e para
@@ -335,7 +355,7 @@ function calcularSLA(notas) {
         // Esse tempo vai para o setor da linha anterior (linha A)
         if (i > 0) {
           const movAnterior = movs[i - 1];
-          const codAnterior = String(movAnterior.st_nota);
+          const codAnterior = String(movAnterior.st_nota || '').trim();
           const mapAnterior = MAPEAMENTO_SETORES[codAnterior];
           const setorAnterior = mapAnterior ? mapAnterior.etapa : ('Placa ' + movAnterior.placa);
 
@@ -371,7 +391,7 @@ function calcularSLA(notas) {
       // O tempo vai para o setor da LINHA ANTERIOR (linha A)
       if (i > 0) {
         const movAnterior = movs[i - 1];
-        const codAnterior = String(movAnterior.st_nota);
+        const codAnterior = String(movAnterior.st_nota || '').trim();
         const mapAnterior = MAPEAMENTO_SETORES[codAnterior];
         const setorAnterior = mapAnterior ? mapAnterior.etapa : ('Placa ' + movAnterior.placa);
 
@@ -412,7 +432,7 @@ function calcularSLA(notas) {
     // Se NÃO está liberado, a última etapa acumula tempo até AGORA
     if (!isLiberado && movs.length > 0) {
       const ultimaMov = movs[movs.length - 1];
-      const codUltimo = String(ultimaMov.st_nota);
+      const codUltimo = String(ultimaMov.st_nota || '').trim();
       const mapUltimo = MAPEAMENTO_SETORES[codUltimo];
       const setorUltimo = mapUltimo ? mapUltimo.etapa : ('Placa ' + ultimaMov.placa);
 
@@ -442,6 +462,23 @@ function calcularSLA(notas) {
           isAtual: true,
           isLiberado: false
         });
+      }
+    }
+
+    // v3.8 FIX: Verificação final - se existe código 19/20 em qualquer movimentação, forçar liberado
+    // Isso garante que notas com código de fim sejam sempre marcadas como liberadas
+    const temCodigoFim = movs.some(m => CODIGOS_FIM_SLA.includes(String(m.st_nota || '').trim()));
+    if (temCodigoFim) {
+      isLiberado = true;
+      etapaAtual = 'Liberado';
+      etapaAtualGrupo = 'liberado';
+      // Encontra o último código de fim para etapaAtualCodigo
+      for (let j = movs.length - 1; j >= 0; j--) {
+        const cod = String(movs[j].st_nota || '').trim();
+        if (CODIGOS_FIM_SLA.includes(cod)) {
+          etapaAtualCodigo = cod;
+          break;
+        }
       }
     }
 

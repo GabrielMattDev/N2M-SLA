@@ -36,12 +36,32 @@ const MAPEAMENTO_SETORES = {
   '10090': { etapa: 'Comercial Bomboniere',          limite: 0.5, nome: 'Comercial Bomboniere', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10096': { etapa: 'Comercial Mercearia Doce',      limite: 0.5, nome: 'Comercial Mercearia Doce', icone: 'fa-handshake', cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10098': { etapa: 'Erro RM Central',               limite: 0.5, nome: 'Erro RM Central',  icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' },
+  '12':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '13':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '14':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '15':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '21':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '25':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '30':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '31':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '32':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '37':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '39':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '43':    { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10030': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10038': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10060': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10061': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10063': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10072': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10085': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  '10087': { etapa: 'Finalizado',                    limite: 0,   nome: 'Finalizado',       icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '19':    { etapa: 'Liberado',                      limite: 0,   nome: 'Liberado',         icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '20':    { etapa: 'Liberado',                      limite: 0,   nome: 'Liberado',         icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
 };
 
 // Códigos que representam fim do SLA (liberado/coletada)
-const CODIGOS_FIM_SLA = ['19', '20'];
+const CODIGOS_FIM_SLA = ['19', '20', '12', '13', '14', '15', '21', '25', '30', '31', '32', '37', '39', '43', '10030', '10038', '10060', '10061', '10063', '10072', '10085', '10087'];
 
 // Status pills CSS classes por grupo
 const STATUS_PILLS = {
