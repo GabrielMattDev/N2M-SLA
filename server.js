@@ -179,8 +179,12 @@ app.get('/api/notas', async (req, res) => {
     const notasAgrupadas = agruparNotas(rows);
     const notasComSLA = calcularSLA(notasAgrupadas);
 
+    // v3.8.3 FIX: Consolidar notas duplicadas (mesmo num_nota com codi_lanc diferentes)
+    // Mantém apenas a nota com MAIOR progresso (liberada > pendente)
+    const notasConsolidadas = consolidarNotasDuplicadas(notasComSLA);
+
     // Aplicar filtro de status (Pendente / Liberado / Todos)
-    let notasFiltradas = notasComSLA;
+    let notasFiltradas = notasConsolidadas;
     if (status === 'pendente') {
       notasFiltradas = notasComSLA.filter(n => !n.isLiberado);
     } else if (status === 'liberado') {
@@ -218,7 +222,7 @@ app.get('/api/notas', async (req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: /api/notas/:codi_lanc - Detalhes de uma nota
+// ENDPOINT: /api/notas/:codi_lanc - Detalhes de uma nota (LEGADO)
 // ============================================================
 app.get('/api/notas/:codi_lanc', async (req, res) => {
   try {
@@ -236,13 +240,50 @@ app.get('/api/notas/:codi_lanc', async (req, res) => {
     const notaAgrupada = agruparNotas(rows);
     const notaComSLA = calcularSLA(notaAgrupada);
 
+    // v3.8.3 FIX: Consolidar se houver múltiplos codi_lanc para a mesma NF
+    const notasConsolidadas = consolidarNotasDuplicadas(notaComSLA);
+
     res.json({
       success: true,
-      data: notaComSLA[0]
+      data: notasConsolidadas[0]
     });
 
   } catch (error) {
     console.error('Erro /api/notas/:codi_lanc:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// ENDPOINT: /api/notas/nf/:num_nota - Detalhes de uma nota por NF
+// v3.8.3: Busca por número da nota fiscal (evita conflito de codi_lanc)
+// ============================================================
+app.get('/api/notas/nf/:num_nota', async (req, res) => {
+  try {
+    const { num_nota } = req.params;
+
+    let sql = buildBaseSQL();
+    sql += ' AND hl.nume_ntfs = ? ORDER BY hl.dtha_hlan ASC';
+
+    const rows = await query(sql, [num_nota]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Nota nao encontrada' });
+    }
+
+    const notaAgrupada = agruparNotas(rows);
+    const notaComSLA = calcularSLA(notaAgrupada);
+
+    // v3.8.3 FIX: Consolidar se houver múltiplos codi_lanc para a mesma NF
+    const notasConsolidadas = consolidarNotasDuplicadas(notaComSLA);
+
+    res.json({
+      success: true,
+      data: notasConsolidadas[0]
+    });
+
+  } catch (error) {
+    console.error('Erro /api/notas/nf/:num_nota:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -468,6 +509,11 @@ function calcularSLA(notas) {
     // v3.8 FIX: Verificação final - se existe código 19/20 em qualquer movimentação, forçar liberado
     // Isso garante que notas com código de fim sejam sempre marcadas como liberadas
     const temCodigoFim = movs.some(m => CODIGOS_FIM_SLA.includes(String(m.st_nota || '').trim()));
+    // DEBUG: log para verificar códigos detectados
+    const codigosDetectados = movs.map(m => String(m.st_nota || '').trim()).filter(c => CODIGOS_FIM_SLA.includes(c));
+    if (codigosDetectados.length > 0) {
+      console.log(`[DEBUG] Nota ${nota.num_nota} - Códigos de fim detectados:`, codigosDetectados);
+    }
     if (temCodigoFim) {
       isLiberado = true;
       etapaAtual = 'Liberado';
@@ -552,6 +598,46 @@ function calcularSLA(notas) {
       totalMovimentacoes: movs.length
     };
   });
+}
+
+// ============================================================
+// FUNÇÃO: Consolidar notas duplicadas (mesmo num_nota, codi_lanc diferentes)
+// v3.8.3: Se uma NF tem múltiplos codi_lanc, mantém apenas a mais completa
+// ============================================================
+function consolidarNotasDuplicadas(notas) {
+  const map = new Map();
+
+  for (const nota of notas) {
+    const numNF = nota.num_nota;
+
+    if (!map.has(numNF)) {
+      // Primeira ocorrência desta NF
+      map.set(numNF, nota);
+    } else {
+      const existente = map.get(numNF);
+
+      // Se a nova nota está liberada e a existente não, substitui
+      if (nota.isLiberado && !existente.isLiberado) {
+        map.set(numNF, nota);
+      }
+      // Se ambas estão liberadas, mantém a que tem mais movimentações
+      else if (nota.isLiberado && existente.isLiberado) {
+        if (nota.totalMovimentacoes > existente.totalMovimentacoes) {
+          map.set(numNF, nota);
+        }
+      }
+      // Se nenhuma está liberada, mantém a que tem mais movimentações
+      // (mais completa/progressiva)
+      else if (!nota.isLiberado && !existente.isLiberado) {
+        if (nota.totalMovimentacoes > existente.totalMovimentacoes) {
+          map.set(numNF, nota);
+        }
+      }
+      // Se a existente está liberada e a nova não, mantém a existente
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 // ============================================================

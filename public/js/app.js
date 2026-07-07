@@ -80,9 +80,9 @@ let notaAtualDetalhes = null;
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   const hoje = new Date();
-  const seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const doisDiasAtras = new Date(hoje.getTime() - 2 * 24 * 60 * 60 * 1000);
   document.getElementById('filterDataFim').value = formatarDataInput(hoje);
-  document.getElementById('filterDataInicio').value = formatarDataInput(seteDiasAtras);
+  document.getElementById('filterDataInicio').value = formatarDataInput(doisDiasAtras);
   carregarLojas();
   aplicarFiltros();
   verificarStatusDB();
@@ -294,14 +294,14 @@ function atualizarTabela() {
       <td>${formatarMinutos(d.tempoTotalHoras)}</td>
       <td><span class="sla-dot ${slaClass}"></span> ${slaTexto} ${d.isLiberado ? '' : '(' + d.pctSLA.toFixed(0) + '%)'}</td>
       <td>${d.totalMovimentacoes}</td>
-      <td><button class="btn-table btn-ver" data-codi="${d.codi_lanc}"><i class="fas fa-eye"></i> Ver</button></td>
+      <td><button class="btn-table btn-ver" data-num-nf="${d.num_nota}"><i class="fas fa-eye"></i> Ver</button></td>
       <td>${alertaHtml}</td>
     </tr>`;
   }
 
   tbody.innerHTML = html;
   document.querySelectorAll('.btn-ver').forEach(btn => {
-    btn.addEventListener('click', function() { verDetalhes(this.dataset.codi); });
+    btn.addEventListener('click', function() { verDetalhes(this.dataset.numNf); });
   });
 
   const info = document.getElementById('tableInfo');
@@ -357,10 +357,10 @@ function filtrarTabelaLocal() {
 // ============================================================
 // MODAL DETALHES PRINCIPAL
 // ============================================================
-async function verDetalhes(codi_lanc) {
+async function verDetalhes(num_nota) {
   mostrarLoading(true);
   try {
-    const data = await fetchAPI(`/api/notas/${codi_lanc}`);
+    const data = await fetchAPI(`/api/notas/nf/${num_nota}`);
     if (!data.success || !data.data) {
       mostrarToast('Nota nao encontrada', 'error');
       mostrarLoading(false);
