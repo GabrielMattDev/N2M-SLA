@@ -51,6 +51,7 @@ const MAPEAMENTO_SETORES = {
   '10090': { etapa: 'Comercial Bomboniere',          limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10096': { etapa: 'Comercial Mercearia Doce',      limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '10098': { etapa: 'Erro RM Central',               limiteSLA: 0.5, icone: 'fa-exclamation-triangle', cor: '#ef4444', ordem: 2, grupo: 'erro' },
+  '10099': { etapa: 'Comercial Bazar com Limpeza',   limiteSLA: 0.5, icone: 'fa-handshake',   cor: '#a855f7', ordem: 3,  grupo: 'comercial' },
   '12':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '13':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '14':    { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
@@ -95,7 +96,7 @@ const ETAPAS_ORDEM = [
   'Comercial Linha Seca', 'Comercial Perecíveis', 'Comercial Bazar',
   'Comercial Perfumaria', 'Comercial Limpeza', 'Comercial Mercearia',
   'Comercial Perfumaria Uso Pessoal', 'Comercial Hort', 'Comercial Bomboniere',
-  'Comercial Mercearia Doce',
+  'Comercial Mercearia Doce','Comercial Bazar com Limpeza',
   'Cadastro', 'Tributário',
   'Encerramento', 'Erro RM Loja', 'Erro RM Central',
   'Liberado', 'Coletada'
