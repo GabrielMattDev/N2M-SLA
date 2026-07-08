@@ -294,14 +294,14 @@ function atualizarTabela() {
       <td>${formatarMinutos(d.tempoTotalHoras)}</td>
       <td><span class="sla-dot ${slaClass}"></span> ${slaTexto} ${d.isLiberado ? '' : '(' + d.pctSLA.toFixed(0) + '%)'}</td>
       <td>${d.totalMovimentacoes}</td>
-      <td><button class="btn-table btn-ver" data-num-nf="${d.num_nota}"><i class="fas fa-eye"></i> Ver</button></td>
+      <td><button class="btn-table btn-ver" data-codi-lanc="${d.codi_lanc}"><i class="fas fa-eye"></i> Ver</button></td>
       <td>${alertaHtml}</td>
     </tr>`;
   }
 
   tbody.innerHTML = html;
   document.querySelectorAll('.btn-ver').forEach(btn => {
-    btn.addEventListener('click', function() { verDetalhes(this.dataset.numNf); });
+    btn.addEventListener('click', function() { verDetalhes(this.dataset.codiLanc); });
   });
 
   const info = document.getElementById('tableInfo');
@@ -357,10 +357,10 @@ function filtrarTabelaLocal() {
 // ============================================================
 // MODAL DETALHES PRINCIPAL
 // ============================================================
-async function verDetalhes(num_nota) {
+async function verDetalhes(codi_lanc) {
   mostrarLoading(true);
   try {
-    const data = await fetchAPI(`/api/notas/nf/${num_nota}`);
+    const data = await fetchAPI(`/api/notas/${codi_lanc}`);
     if (!data.success || !data.data) {
       mostrarToast('Nota nao encontrada', 'error');
       mostrarLoading(false);

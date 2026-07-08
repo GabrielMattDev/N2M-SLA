@@ -222,7 +222,8 @@ app.get('/api/notas', async (req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: /api/notas/:codi_lanc - Detalhes de uma nota (LEGADO)
+// ENDPOINT: /api/notas/:codi_lanc - Detalhes de uma nota por codi_lanc
+// v3.8.4 FIX: Retorna o lançamento específico SEM consolidar
 // ============================================================
 app.get('/api/notas/:codi_lanc', async (req, res) => {
   try {
@@ -240,12 +241,11 @@ app.get('/api/notas/:codi_lanc', async (req, res) => {
     const notaAgrupada = agruparNotas(rows);
     const notaComSLA = calcularSLA(notaAgrupada);
 
-    // v3.8.3 FIX: Consolidar se houver múltiplos codi_lanc para a mesma NF
-    const notasConsolidadas = consolidarNotasDuplicadas(notaComSLA);
-
+    // v3.8.4 FIX: Retorna direto o lançamento específico do codi_lanc
+    // NÃO chama consolidarNotasDuplicadas() — isso causava troca de fornecedor/loja
     res.json({
       success: true,
-      data: notasConsolidadas[0]
+      data: notaComSLA[0]
     });
 
   } catch (error) {
