@@ -8,6 +8,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 
@@ -62,6 +63,13 @@
       <option value="todos">Todos</option>
       <option value="pendente">Pendente</option>
       <option value="liberado">Liberado</option>
+    </select>
+  </div>
+  <!-- v3.8.5: Filtro de Setor -->
+  <div class="filter-group">
+    <label><i class="fas fa-sitemap"></i> Setor</label>
+    <select id="filterSetor">
+      <option value="todos">Todos</option>
     </select>
   </div>
   <button class="btn btn-primary btn-sm" onclick="aplicarFiltros()">

@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('filterDataFim').value = formatarDataInput(hoje);
   document.getElementById('filterDataInicio').value = formatarDataInput(doisDiasAtras);
   carregarLojas();
+  carregarSetores();
   aplicarFiltros();
   verificarStatusDB();
 });
@@ -121,6 +122,32 @@ async function carregarLojas() {
   }
 }
 
+// v3.8.5: Carregar opções de setor no filtro
+function carregarSetores() {
+  const select = document.getElementById('filterSetor');
+  if (!select) return;
+  select.innerHTML = '<option value="todos">Todos</option>';
+
+  // Extrair setores únicos do MAPEAMENTO_SETORES
+  const setoresUnicos = new Map();
+  for (const cod in MAPEAMENTO_SETORES) {
+    const s = MAPEAMENTO_SETORES[cod];
+    if (!setoresUnicos.has(s.etapa)) {
+      setoresUnicos.set(s.etapa, { codigo: cod, ...s });
+    }
+  }
+
+  // Ordenar por ordem definida
+  const setoresOrdenados = Array.from(setoresUnicos.values()).sort((a, b) => a.ordem - b.ordem);
+
+  setoresOrdenados.forEach(s => {
+    const option = document.createElement('option');
+    option.value = s.codigo;
+    option.textContent = s.etapa;
+    select.appendChild(option);
+  });
+}
+
 async function verificarStatusDB() {
   try {
     const data = await fetchAPI('/health');
@@ -153,7 +180,8 @@ async function aplicarFiltros() {
       loja: document.getElementById('filterLoja').value,
       nota: document.getElementById('filterNota').value,
       fornecedor: document.getElementById('filterFornecedor').value,
-      status: document.getElementById('filterStatus').value  // v3.8: novo filtro de status
+      status: document.getElementById('filterStatus').value,  // v3.8: filtro de status
+      setor: document.getElementById('filterSetor')?.value || 'todos'  // v3.8.5: filtro de setor
     };
     const data = await fetchAPI('/api/notas', params);
     if (data.success) {
@@ -182,6 +210,8 @@ function limparFiltros() {
   document.getElementById('filterNota').value = '';
   document.getElementById('filterFornecedor').value = '';
   document.getElementById('filterStatus').value = 'todos';  // v3.8: resetar status
+  const filterSetor = document.getElementById('filterSetor');
+  if (filterSetor) filterSetor.value = 'todos';  // v3.8.5: resetar setor
   aplicarFiltros();
 }
 
@@ -288,7 +318,7 @@ function atualizarTabela() {
     html += `<tr class="${rowClass}">
       <td class="td-nf">${d.num_nota}</td>
       <td>${d.nome_forn}</td>
-      <td>${d.codi_loja}</td>
+      <td>${d.nome_loja || d.codi_loja}</td>
       <td>${formatarData(d.dataPrimeiroLog || d.dtha_lanc)}</td>
       <td><span class="status-pill ${pillClass}"><i class="fas fa-circle"></i> ${d.isLiberado ? 'Liberado' : (config.nome || d.etapaAtual)}</span></td>
       <td>${formatarMinutos(d.tempoTotalHoras)}</td>
@@ -347,7 +377,8 @@ function filtrarTabelaLocal() {
     dadosFiltrados = dadosNotas.filter(d =>
       d.num_nota.toLowerCase().includes(termo) ||
       d.nome_forn.toLowerCase().includes(termo) ||
-      d.codi_loja.toString().includes(termo)
+      d.codi_loja.toString().includes(termo) ||
+      (d.nome_loja || '').toLowerCase().includes(termo)
     );
   }
   paginaAtual = 1;

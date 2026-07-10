@@ -117,6 +117,7 @@ function buildBaseSQL() {
       la.dtha_alte,
       la.codi_stus,
       st.nome_stus AS status_geral,
+      lj.nome_loja,
 
       hl.dtha_hlan AS dt_hora,
       hl.plca_lanc AS placa,
@@ -134,6 +135,7 @@ function buildBaseSQL() {
     JOIN cad_hlan_tb hl ON (hl.codi_lanc = la.codi_lanc)
     JOIN cad_stus_tb stp ON (stp.codi_stus = hl.stus_plca)
     JOIN cad_stus_tb stn ON (stn.codi_stus = hl.stus_nota)
+    LEFT JOIN cad_loja_tb lj ON (lj.codi_loja = la.codi_loja)
     WHERE 1=1
   `;
 }
@@ -143,7 +145,7 @@ function buildBaseSQL() {
 // ============================================================
 app.get('/api/notas', async (req, res) => {
   try {
-    const { dataInicio, dataFim, loja, nota, fornecedor, status } = req.query;
+    const { dataInicio, dataFim, loja, nota, fornecedor, status, setor } = req.query;
 
     let sql = buildBaseSQL();
     const params = [];
@@ -171,7 +173,6 @@ app.get('/api/notas', async (req, res) => {
       sql += ' AND fn.nome_forn LIKE ?';
       params.push('%' + fornecedor + '%');
     }
-
     // Ordenação SQL: por data do lançamento (depois reordenamos no JS por SLA)
     sql += ' ORDER BY la.dtha_lanc DESC, hl.dtha_hlan ASC';
 
@@ -192,6 +193,22 @@ app.get('/api/notas', async (req, res) => {
       notasFiltradas = notasComSLA.filter(n => n.isLiberado);
     }
     // status === 'todos' ou undefined = não filtra
+
+    // v3.8.5 FIX: Filtro de setor pela ETAPA ATUAL (última movimentação)
+    // Se status = 'liberado', o filtro de setor NÃO é aplicado (mostra todas liberadas)
+    // Se status = 'pendente' ou 'todos', compara etapaAtualCodigo com o setor filtrado
+    if (setor && setor !== 'todos') {
+      notasFiltradas = notasFiltradas.filter(n => {
+        // Se o usuário filtrou por 'Liberado', não aplica filtro de setor
+        // (mostra todas as notas liberadas, independente do setor histórico)
+        if (status === 'liberado') return true;
+        // Para 'pendente' ou 'todos': notas liberadas não têm setor específico
+        // (etapa atual é sempre 'Liberado'/'Coletada'), então são ignoradas
+        if (n.isLiberado) return false;
+        // Compara o código da etapa atual com o setor filtrado
+        return String(n.etapaAtualCodigo) === String(setor);
+      });
+    }
 
     // Ordenação padrão: notas com maior SLA primeiro
     // Prioridade: não liberados com maior pctSLA, depois liberados
@@ -324,6 +341,7 @@ function agruparNotas(rows) {
       map.set(key, {
         codi_lanc: row.codi_lanc,
         codi_loja: row.codi_loja,
+        nome_loja: row.nome_loja,
         codi_forn: row.codi_forn,
         nome_forn: row.nome_forn,
         num_nota: row.num_nota,
