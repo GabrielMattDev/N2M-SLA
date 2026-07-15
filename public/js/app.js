@@ -607,7 +607,7 @@ function fecharSubModal() {
 // ============================================================
 function exportarExcel() {
   if (!dadosNotas || dadosNotas.length === 0) {
-    mostrarToast('Nenhum dado para exportar', 'error');
+    mostrarToast('Nenhum dado pra exportar', 'error');
     return;
   }
   const headers = ['Numero NF', 'Fornecedor', 'Loja', 'Data Lancamento', 'Etapa Atual', 'Tempo Total', 'Status SLA', 'Pct SLA', 'Movimentacoes'];

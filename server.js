@@ -70,14 +70,14 @@ const MAPEAMENTO_SETORES = {
   '10061': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '10063': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '10072': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
-  '10085': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
+  // '10085': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '10087': { etapa: 'Finalizado',                    limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '19':    { etapa: 'Liberado',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' },
   '20':    { etapa: 'Coletada',                      limiteSLA: 0,   icone: 'fa-check-circle',cor: '#10b981', ordem: 99, grupo: 'liberado' }
 };
 
 // Códigos que representam fim do SLA (liberado/coletada)
-const CODIGOS_FIM_SLA = ['19', '20', '12', '13', '14', '15', '21', '25', '30', '31', '32', '37', '39', '43', '10030', '10038', '10060', '10061', '10063', '10072', '10085', '10087'];
+const CODIGOS_FIM_SLA = ['19','20', '12', '13', '14', '15', '21', '25', '30', '31', '32', '37', '39', '43', '10030', '10038', '10060', '10061', '10063', '10072', '10085', '10087','10085'];
 
 // Grupos para exibição resumida na tela principal
 const GRUPOS_RESUMIDOS = {
@@ -100,7 +100,7 @@ const ETAPAS_ORDEM = [
   'Cadastro', 'Tributário',
   'Encerramento', 'Erro RM Loja', 'Erro RM Central',
   'Liberado', 'Coletada'
-];
+]; 
 
 // ============================================================
 // SQL BASE
